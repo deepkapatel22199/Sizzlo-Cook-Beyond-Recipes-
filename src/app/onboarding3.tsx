@@ -31,7 +31,7 @@ export default function Onboarding3() {
         <View style={styles.middleSection}>
           <View style={styles.featuresList}>
             <Feature icon="mic-outline" title="Voice Guided" sub="Step-by-step voice instructions" />
-            <Feature icon="play-forward-outline" title="Easy Commands" sub={`Next, repeat,\nprevious, pause & more`}/>
+            <Feature icon="play-forward-outline" title="Easy Commands" sub={`Next, repeat, previous, \npause & more`}/>
             <Feature icon="timer-outline" title="Set Timers" sub={`Set timers with your \nvoice while cooking`} />
             <Feature icon="restaurant-outline" title="Stay Focused" sub={`No touching screen, \njust enjoy cooking`}/>
           </View>
