@@ -52,14 +52,14 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
 
           <View style={styles.dots}>
-            <View style={[styles.dot, styles.activeDot]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
+            <TouchableOpacity  onPress={() => router.replace('/onboarding1')} style={[styles.dot, styles.activeDot]} />
+            <TouchableOpacity style={styles.dot} />
+            <TouchableOpacity style={styles.dot} />
           </View>
 
           <TouchableOpacity
             style={styles.nextButton}
-            onPress={() => router.replace('/')}
+            onPress={() => router.replace('/onboarding2')}
           >
             <Text style={styles.arrow}><Ionicons name="arrow-forward" size={28} color="#FFFFFF" /></Text>
           </TouchableOpacity>
