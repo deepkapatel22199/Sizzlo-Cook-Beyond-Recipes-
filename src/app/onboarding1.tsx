@@ -52,9 +52,9 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
 
           <View style={styles.dots}>
-            <TouchableOpacity  onPress={() => router.replace('/onboarding1')} style={[styles.dot, styles.activeDot]} />
-            <TouchableOpacity style={styles.dot} />
-            <TouchableOpacity style={styles.dot} />
+            <TouchableOpacity onPress={() => router.replace('/onboarding1')} style={[styles.dot, styles.activeDot]} />
+            <TouchableOpacity onPress={() => router.replace('/onboarding2')} style={styles.dot} />
+            <TouchableOpacity onPress={() => router.replace('/onboarding3')} style={styles.dot} />
           </View>
 
           <TouchableOpacity
@@ -97,6 +97,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginTop: 16,
     color: '#4B5563',
+    fontWeight:'500',
   },
 
   cardsRow: {
