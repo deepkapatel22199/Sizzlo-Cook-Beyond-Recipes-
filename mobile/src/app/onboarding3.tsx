@@ -70,7 +70,7 @@ export default function Onboarding3() {
 
         <TouchableOpacity
           style={styles.getStartedButton}
-          onPress={() => router.replace('/')}
+          onPress={() => router.replace('/login')}
         >
           <Text style={styles.getStartedText}>Get Started</Text>
         </TouchableOpacity>
