@@ -17,32 +17,50 @@ import { router } from "expo-router";
 
 const API_URL = "http://10.0.2.2:8000";
 
-export default function Login() {
+export default function Signup() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Missing Info", "Please enter email and password.");
+  const hasMinLength = password.length >= 8;
+  const hasNumber = /\d/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const showPasswordRules = password.length > 0;
+
+  const handleSignup = async () => {
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert("Missing Info", "Please fill all fields.");
+      return;
+    }
+
+    if (!hasMinLength || !hasNumber || !hasUppercase || !hasSpecialChar) {
+      Alert.alert("Weak Password", "Please complete all password rules.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert("Password Error", "Passwords do not match.");
       return;
     }
 
     try {
-      const response = await fetch(`${API_URL}/login`, {
+      const response = await fetch(`${API_URL}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name, email, password }),
       });
 
       const data = await response.json();
 
-      if (data.access_token) {
-        Alert.alert("Success", "Login successful");
-        router.replace("/");
+      if (data.user_id) {
+        Alert.alert("Success", "Account created successfully");
+        router.replace("/login");
       } else {
-        Alert.alert("Error", data.error || "Login failed");
+        Alert.alert("Error", data.error || "Signup failed");
       }
     } catch {
       Alert.alert("Error", "Cannot connect to server");
@@ -71,14 +89,26 @@ export default function Login() {
               </Text>
             </View>
 
-            <Text style={styles.title}>Welcome Back!</Text>
+            <Text style={styles.title}>Create Your Account</Text>
             <Text style={styles.subtitle}>
-              Login to continue your{"\n"}AI cooking journey
+              Join millions of home chefs{"\n"}cooking smarter with AI
             </Text>
 
             <View style={styles.inputBox}>
-              <Ionicons name="mail-outline" size={22} color="#075B34" />
+              <Ionicons name="person-outline" size={22} color="#075B34" />
+              <View style={styles.inputTextWrap}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your full name"
+                  placeholderTextColor="#8C8C8C"
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
+            </View>
 
+            <View style={styles.inputBox}>
+              <Ionicons name="mail-outline" size={22} color="#075B34" />
               <View style={styles.inputTextWrap}>
                 <TextInput
                   style={styles.input}
@@ -94,18 +124,16 @@ export default function Login() {
 
             <View style={styles.inputBox}>
               <Ionicons name="lock-closed-outline" size={22} color="#075B34" />
-
               <View style={styles.inputTextWrap}>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your password"
+                  placeholder="Create a password"
                   placeholderTextColor="#8C8C8C"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                 />
               </View>
-
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
                   name={showPassword ? "eye-outline" : "eye-off-outline"}
@@ -115,32 +143,49 @@ export default function Login() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.optionsRow}>
+            <View style={styles.inputBox}>
+              <Ionicons name="lock-closed-outline" size={22} color="#075B34" />
+              <View style={styles.inputTextWrap}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm your password"
+                  placeholderTextColor="#8C8C8C"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirmPassword}
+                />
+              </View>
               <TouchableOpacity
-                style={styles.rememberRow}
-                onPress={() => setRememberMe(!rememberMe)}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               >
-                <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
-                  {rememberMe && (
-                    <Ionicons name="checkmark" size={13} color="#fff" />
-                  )}
-                </View>
-
-                <Text style={styles.rememberText}>Remember me</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity>
-                <Text style={styles.forgotText}>Forgot Password?</Text>
+                <Ionicons
+                  name={showConfirmPassword ? "eye-outline" : "eye-off-outline"}
+                  size={21}
+                  color="#9A9A9A"
+                />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginButtonText}>Login</Text>
+            {showPasswordRules && (
+              <View style={styles.passwordBox}>
+                <Text style={styles.passwordTitle}>Password must contain:</Text>
+
+                <View style={styles.rulesGrid}>
+                  <Rule text="At least 8 characters" active={hasMinLength} />
+                  <Rule text="One number" active={hasNumber} />
+                  <Rule text="One uppercase letter" active={hasUppercase} />
+                  <Rule text="One special character" active={hasSpecialChar} />
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.createButton} onPress={handleSignup}>
+              <Text style={styles.createButtonText}>Create Account</Text>
             </TouchableOpacity>
 
             <View style={styles.dividerRow}>
               <View style={styles.line} />
-              <Text style={styles.dividerText}>or continue with</Text>
+              <Text style={styles.dividerText}>or sign up with</Text>
               <View style={styles.line} />
             </View>
 
@@ -159,16 +204,29 @@ export default function Login() {
               <Text style={styles.socialText}>Continue with Facebook</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push("/signup")}>
+            <TouchableOpacity onPress={() => router.push("/login")}>
               <Text style={styles.bottomText}>
-                Don’t have an account?{" "}
-                <Text style={styles.signupText}>Sign up</Text>
+                Already have an account?{" "}
+                <Text style={styles.loginText}>Login</Text>
               </Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ImageBackground>
+  );
+}
+
+function Rule({ text, active }: { text: string; active: boolean }) {
+  return (
+    <View style={styles.ruleItem}>
+      <View style={[styles.ruleIcon, active && styles.ruleIconActive]}>
+        {active && <Ionicons name="checkmark" size={13} color="#fff" />}
+      </View>
+      <Text style={[styles.ruleText, active && styles.ruleTextActive]}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
@@ -238,55 +296,56 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 16,
   },
-  inputLabel: {
-    fontSize: 13,
-    color: "#111",
-    fontWeight: "700",
-    marginBottom: 2,
-  },
   input: {
     fontSize: 16,
     color: "#222",
     fontWeight: "500",
     padding: 0,
   },
-  optionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-    marginBottom: 16,
+  passwordBox: {
+    borderRadius: 16,
+    backgroundColor: "rgba(235,244,235,0.86)",
+    padding: 12,
+    marginTop: 2,
+    marginBottom: 14,
   },
-  rememberRow: {
+  passwordTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#111",
+    marginBottom: 10,
+  },
+  rulesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 10,
+  },
+  ruleItem: {
+    width: "50%",
     flexDirection: "row",
     alignItems: "center",
   },
-  checkbox: {
-    width: 21,
-    height: 21,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: "#D1D5DB",
+  ruleIcon: {
+    width: 19,
+    height: 19,
+    borderRadius: 10,
+    backgroundColor: "#D1D5DB",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    marginRight: 7,
   },
-  checkboxActive: {
-    backgroundColor: "#075B34",
-    borderColor: "#075B34",
+  ruleIconActive: {
+    backgroundColor: "#5FA66F",
   },
-  rememberText: {
-    marginLeft: 8,
-    fontSize: 13.5,
-    color: "#202124",
-    fontWeight: "600",
+  ruleText: {
+    fontSize: 12.2,
+    color: "#777",
+    fontWeight: "500",
   },
-  forgotText: {
-    fontSize: 13.5,
-    color: "#075B34",
-    fontWeight: "700",
+  ruleTextActive: {
+    color: "#111",
   },
-  loginButton: {
+  createButton: {
     height: 56,
     borderRadius: 18,
     backgroundColor: "#006B3C",
@@ -294,7 +353,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  loginButtonText: {
+  createButtonText: {
     fontSize: 18,
     color: "#fff",
     fontWeight: "800",
@@ -343,7 +402,7 @@ const styles = StyleSheet.create({
     color: "#30343B",
     fontWeight: "500",
   },
-  signupText: {
+  loginText: {
     color: "#075B34",
     fontWeight: "800",
   },
