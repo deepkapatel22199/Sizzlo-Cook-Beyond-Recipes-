@@ -104,7 +104,7 @@ export default function Home() {
         <View style={{ height: 95 }} />
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push("/")}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push("/create-recipe")}>
         <Ionicons name="add" size={36} color="#fff" />
       </TouchableOpacity>
 

@@ -1,11 +1,14 @@
 import { Stack } from "expo-router";
+import { RecipeProvider } from "./context/RecipeContext";
 
 export default function RootLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="splash" />
-      <Stack.Screen name="onboarding1" />
-    </Stack>
+    <RecipeProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="splash" />
+        <Stack.Screen name="onboarding1" />
+      </Stack>
+    </RecipeProvider>
   );
 }
