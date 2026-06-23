@@ -40,7 +40,7 @@ export default function Login() {
 
       if (data.access_token) {
         Alert.alert("Success", "Login successful");
-        router.replace("/");
+        router.replace("/home");
       } else {
         Alert.alert("Error", data.error || "Login failed");
       }
