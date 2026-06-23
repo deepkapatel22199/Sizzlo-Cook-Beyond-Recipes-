@@ -17,6 +17,7 @@ const recommendedRecipes = [
   { id: "3", title: "Quinoa Veggie Bowl", time: "20 mins", difficulty: "Easy", rating: "4.7" },
 ];
 
+
 export default function Home() {
   return (
     <SafeAreaView style={styles.safe}>
@@ -112,7 +113,7 @@ export default function Home() {
         <NavItem icon="home" label="Home" active />
         <NavItem icon="heart-outline" label="Saved" />
         <NavItem icon="restaurant-outline" label="AI Chef" />
-        <NavItem icon="people-outline" label="Community" />
+        <NavItem icon="people-outline" label="Community" onPress={() => router.push("/community")}/>
         <NavItem icon="person-outline" label="Profile" />
       </View>
     </SafeAreaView>
@@ -169,15 +170,42 @@ function RecipeCard({ recipe }: { recipe: any }) {
   );
 }
 
-function NavItem({ icon, label, active }: { icon: any; label: string; active?: boolean }) {
+function NavItem({
+  icon,
+  label,
+  active,
+  onPress,
+}: {
+  icon: any;
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+}) {
   return (
-    <TouchableOpacity style={styles.navItem}>
-      <Ionicons name={icon} size={23} color={active ? "#075B34" : "#6B7280"} />
-      <Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text>
+    <TouchableOpacity
+      style={styles.navItem}
+      onPress={onPress}
+    >
+      <Ionicons
+        name={icon}
+        size={23}
+        color={active ? "#075B34" : "#6B7280"}
+      />
+
+      <Text
+        style={[
+          styles.navLabel,
+          active && styles.navLabelActive,
+        ]}
+      >
+        {label}
+      </Text>
+
       {active && <View style={styles.activeLine} />}
     </TouchableOpacity>
   );
 }
+
 
 const styles = StyleSheet.create({
   safe: {

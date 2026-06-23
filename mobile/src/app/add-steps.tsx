@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useRecipe } from "./context/RecipeContext";
 
 type RecipeStep = {
   id: string;
@@ -18,11 +19,9 @@ type RecipeStep = {
 };
 
 export default function AddSteps() {
-  const [steps, setSteps] = useState<RecipeStep[]>([
-    { id: "1", instruction: "Rinse quinoa and cook it in water for 15 minutes." },
-    { id: "2", instruction: "Season chicken and cook it until golden." },
-  ]);
 
+  const { updateRecipe } = useRecipe();
+  const [steps, setSteps] = useState<RecipeStep[]>([]);
   const [instruction, setInstruction] = useState("");
 
   const addStep = () => {
@@ -51,6 +50,10 @@ export default function AddSteps() {
       Alert.alert("Add Steps", "Please add at least one cooking step.");
       return;
     }
+
+    updateRecipe({
+    steps,
+  });
 
     router.push("/upload-photos");
   };

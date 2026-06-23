@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState } from "react";
 type Ingredient = {
   id: string;
   name: string;
+  quantity: string;
 };
 
 type RecipeStep = {

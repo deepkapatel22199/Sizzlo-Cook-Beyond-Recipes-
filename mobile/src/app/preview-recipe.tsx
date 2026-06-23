@@ -11,8 +11,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRecipe } from "./context/RecipeContext";
 
 export default function PreviewRecipe() {
+  const { recipe, resetRecipe } = useRecipe();
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
 
   const publishRecipe = () => {
@@ -21,8 +23,15 @@ export default function PreviewRecipe() {
 
   const closeAlert = () => {
     setShowSuccessAlert(false);
+    resetRecipe();
     router.push("/home");
   };
+
+  const imageUri =
+    recipe.photos.length > 0
+      ? recipe.photos[0]
+      : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -51,15 +60,15 @@ export default function PreviewRecipe() {
         {/* Image */}
         <View style={styles.imageCard}>
           <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c",
-            }}
+            source={{ uri: imageUri }}
             style={styles.recipeImage}
           />
 
           <View style={styles.imageOverlay}>
-            <Text style={styles.recipeTitle}>Chicken Quinoa Bowl</Text>
-            <Text style={styles.recipeSubText}>Healthy • High Protein</Text>
+            <Text style={styles.recipeTitle}>{recipe.title}</Text>
+            <Text style={styles.recipeSubText}>
+                 {recipe.category || "Recipe"} • {recipe.description}
+            </Text>
           </View>
         </View>
 
@@ -67,19 +76,19 @@ export default function PreviewRecipe() {
         <View style={styles.infoRow}>
           <View style={styles.infoCard}>
             <Ionicons name="time-outline" size={21} color="#075B34" />
-            <Text style={styles.infoValue}>25 min</Text>
+            <Text style={styles.infoValue}>{recipe.cookTime} min</Text>
             <Text style={styles.infoLabel}>Time</Text>
           </View>
 
           <View style={styles.infoCard}>
             <Ionicons name="barbell-outline" size={21} color="#075B34" />
-            <Text style={styles.infoValue}>Easy</Text>
+            <Text style={styles.infoValue}>{recipe.difficulty}</Text>
             <Text style={styles.infoLabel}>Level</Text>
           </View>
 
           <View style={styles.infoCard}>
             <Ionicons name="people-outline" size={21} color="#075B34" />
-            <Text style={styles.infoValue}>2</Text>
+            <Text style={styles.infoValue}>{recipe.servings}</Text>
             <Text style={styles.infoLabel}>Serves</Text>
           </View>
         </View>
@@ -88,16 +97,10 @@ export default function PreviewRecipe() {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Ingredients</Text>
 
-          {[
-            "1 cup cooked quinoa",
-            "200g grilled chicken",
-            "1 avocado",
-            "Cherry tomatoes",
-            "Lemon dressing",
-          ].map((item, index) => (
-            <View key={index} style={styles.listItem}>
+          {recipe.ingredients.map((item) => (
+            <View key={item.id} style={styles.listItem}>
               <View style={styles.dot} />
-              <Text style={styles.listText}>{item}</Text>
+              <Text style={styles.listText}>{item.quantity} {item.name} </Text>
             </View>
           ))}
         </View>
@@ -106,18 +109,13 @@ export default function PreviewRecipe() {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Cooking Steps</Text>
 
-          {[
-            "Cook quinoa until soft and fluffy.",
-            "Grill chicken with salt, pepper, and spices.",
-            "Slice avocado and tomatoes.",
-            "Add everything into a bowl and mix with lemon dressing.",
-          ].map((step, index) => (
-            <View key={index} style={styles.stepItem}>
+           {recipe.steps.map((step, index) => (
+            <View key={step.id} style={styles.stepItem}>
               <View style={styles.stepNumber}>
                 <Text style={styles.stepNumberText}>{index + 1}</Text>
               </View>
 
-              <Text style={styles.stepText}>{step}</Text>
+              <Text style={styles.stepText}>{step.instruction}</Text>
             </View>
           ))}
         </View>

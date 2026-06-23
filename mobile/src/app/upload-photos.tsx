@@ -12,8 +12,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRecipe } from "./context/RecipeContext";
 
 export default function UploadPhotos() {
+    const { updateRecipe } = useRecipe();
   const [photos, setPhotos] = useState<string[]>([]);
 
   const pickImages = async () => {
@@ -45,7 +47,9 @@ export default function UploadPhotos() {
     //   Alert.alert("Add Photos", "Please upload at least one recipe photo.");
     //   return;
     // }
-
+    updateRecipe({
+        photos,
+    });
     router.push("/preview-recipe");
   };
 

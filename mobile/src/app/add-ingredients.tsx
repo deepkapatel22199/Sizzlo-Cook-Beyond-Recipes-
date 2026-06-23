@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useRecipe } from "./context/RecipeContext";
 
 type Ingredient = {
   id: string;
@@ -19,11 +20,9 @@ type Ingredient = {
 };
 
 export default function AddIngredients() {
-  const [ingredients, setIngredients] = useState<Ingredient[]>([
-    { id: "1", name: "Quinoa", quantity: "1 cup" },
-    { id: "2", name: "Chicken Breast", quantity: "200 g" },
-  ]);
 
+  const { updateRecipe } = useRecipe();
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
 
@@ -49,13 +48,17 @@ export default function AddIngredients() {
   };
 
   const goNext = () => {
-    if (ingredients.length === 0) {
-      Alert.alert("Add Ingredients", "Please add at least one ingredient.");
-      return;
-    }
+  if (ingredients.length === 0) {
+    Alert.alert("Add Ingredients", "Please add at least one ingredient.");
+    return;
+  }
 
-    router.push("/add-steps");
-  };
+  updateRecipe({
+    ingredients,
+  });
+
+  router.push("/add-steps");
+};
 
   return (
     <SafeAreaView style={styles.container}>
