@@ -9,50 +9,62 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useEffect, useState } from "react";
+import { ActivityIndicator } from "react-native";
+import { API_URL } from "../../../services/api";
 
-const creators = [
-  {
-    id: "1",
-    name: "Maya Cooks",
-    username: "@mayacooks",
-    bio: "Healthy homemade recipes for busy cooks.",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
-    recipes: 24,
-    likes: "5.2k",
-    posts: [
-      {
-        id: "1",
-        title: "Creamy Tomato Pasta",
-        image:
-          "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=800",
-      },
-      {
-        id: "2",
-        title: "Avocado Toast",
-        image:
-          "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800",
-      },
-      {
-        id: "3",
-        title: "Chickpea Bowl",
-        image:
-          "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800",
-      },
-      {
-        id: "4",
-        title: "Fruit Pancakes",
-        image:
-          "https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=800",
-      },
-    ],
-  },
-];
+type CreatorProfile = {
+  id: number;
+  name: string;
+  email: string;
+  bio: string;
+  avatar: string | null;
+  recipes_count: number;
+  recipes: {
+    id: number;
+    title: string;
+    image: string;
+    diet: string;
+  }[];
+};
 
 export default function CreatorProfile() {
-  const { id } = useLocalSearchParams();
+ const { id } = useLocalSearchParams();
+const [creator, setCreator] = useState<CreatorProfile | null>(null);
+const [loading, setLoading] = useState(true);
 
-  const creator = creators.find((item) => item.id === id) || creators[0];
+useEffect(() => {
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch(`${API_URL}/users/${id}/profile`);
+      const data = await response.json();
+      setCreator(data);
+    } catch (error) {
+      console.log("Profile error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchProfile();
+}, [id]);
+
+if (loading) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <ActivityIndicator size="large" color="#F97316" style={{ marginTop: 60 }} />
+    </SafeAreaView>
+  );
+}
+
+if (!creator) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text>User not found</Text>
+    </SafeAreaView>
+  );
+}
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -72,25 +84,32 @@ export default function CreatorProfile() {
 
         {/* Profile Info */}
         <View style={styles.profileSection}>
-          <Image source={{ uri: creator.avatar }} style={styles.avatar} />
+          <Image
+  source={{
+    uri:
+      creator.avatar ||
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
+  }}
+  style={styles.avatar}
+/>
 
           <Text style={styles.name}>{creator.name}</Text>
-          <Text style={styles.username}>{creator.username}</Text>
+          <Text style={styles.username}>{creator.name}</Text>
           <Text style={styles.bio}>{creator.bio}</Text>
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{creator.recipes}</Text>
+              <Text style={styles.statNumber}>{creator.recipes_count}</Text>
               <Text style={styles.statLabel}>Recipes</Text>
             </View>
 
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{creator.likes}</Text>
+              <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Likes</Text>
             </View>
 
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>12k</Text>
+              <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Views</Text>
             </View>
           </View>
@@ -106,21 +125,15 @@ export default function CreatorProfile() {
 
         {/* Recipe Grid */}
         <View style={styles.grid}>
-          {creator.posts.map((post) => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.gridItem}
-              onPress={() => router.push(`/community/post/${post.id}` as any)}
-            >
-              <Image source={{ uri: post.image }} style={styles.gridImage} />
-
-              <View style={styles.overlay}>
-                <Text numberOfLines={1} style={styles.gridTitle}>
-                  {post.title}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {creator.recipes.map((post) => (
+  <TouchableOpacity
+    key={post.id}
+    style={styles.gridItem}
+    onPress={() => router.push(`/community/post/${post.id}` as any)}
+  >
+    <Image source={{ uri: post.image }} style={styles.gridImage} />
+  </TouchableOpacity>
+))}
         </View>
 
         <View style={{ height: 30 }} />

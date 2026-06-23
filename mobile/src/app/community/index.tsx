@@ -10,57 +10,52 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RefreshControl } from "react-native";
-import { useState } from "react";
+import {useEffect, useState } from "react";
+import { ActivityIndicator } from "react-native";
+import { API_URL } from "../../services/api";
 
-const posts = [
-  {
-    id: "1",
-    title: "Creamy Tomato Pasta",
-    creator: "Aarav Kitchen",
-    image:
-      "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-    time: "25 mins",
-    likes: 240,
-    diet: "Vegetarian",
-  },
-  {
-    id: "2",
-    title: "Healthy Avocado Toast",
-    creator: "Maya Cooks",
-    image:
-      "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-    time: "15 mins",
-    likes: 180,
-    diet: "High Protein",
-  },
-  {
-    id: "3",
-    title: "Spicy Chickpea Bowl",
-    creator: "Sizzlo Chef",
-    image:
-      "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-    time: "20 mins",
-    likes: 320,
-    diet: "Vegan",
-  },
-];
+
+type RecipePost = {
+  id: number;
+  title: string;
+  description: string;
+  image: string;
+  cook_time: string;
+  difficulty: string;
+  servings: string;
+  diet: string;
+  creator: string;
+  creator_id: number;
+};
 
 export default function CommunityHomeFeed() {
-    const [refreshing, setRefreshing] = useState(false);
+  const [posts, setPosts] = useState<RecipePost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+const fetchRecipes = async () => {
+  try {
+    const response = await fetch(`${API_URL}/recipes`);
+    const data = await response.json();
+    setPosts(data);
+  } catch (error) {
+    console.log("Fetch recipes error:", error);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
+
+useEffect(() => {
+  fetchRecipes();
+}, []);
 
 const onRefresh = () => {
   setRefreshing(true);
-
-  setTimeout(() => {
-    setRefreshing(false);
-  }, 1500);
+  fetchRecipes();
 };
+
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}
@@ -81,9 +76,9 @@ const onRefresh = () => {
     </TouchableOpacity>
 
     <TouchableOpacity
-      style={styles.profileButton}
-      onPress={() => router.push("/community/profile/me" as any)}
-    >
+  style={styles.creatorRow}
+  onPress={() => router.push("/community/profile/me" as any)}
+>
       <Image
         source={{
           uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
@@ -121,70 +116,97 @@ const onRefresh = () => {
             )
           )}
         </ScrollView>
+{loading && (
+  <ActivityIndicator size="large" color="#F97316" style={{ marginTop: 40 }} />
+)}
 
         {/* Feed */}
         <View style={styles.feed}>
-          {posts.map((post) => (
-            <View key={post.id} style={styles.card}>
-              {/* Creator Row */}
-              <TouchableOpacity
-                style={styles.creatorRow}
-                onPress={() => router.push(`/community/profile/${post.id}` as any)}
-              >
-                <Image source={{ uri: post.avatar }} style={styles.avatar} />
+  {posts.map((post) => (
+    <View key={post.id} style={styles.card}>
+      {/* Creator Row */}
+      <TouchableOpacity
+        style={styles.creatorRow}
+        onPress={() => {
+          console.log("Creator clicked:", post.creator_id);
+          router.push(`/community/profile/${post.creator_id}` as any);
+        }}
+      >
+        <Image
+          source={{
+            uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
+          }}
+          style={styles.avatar}
+        />
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.creatorName}>{post.creator}</Text>
-                  <Text style={styles.creatorSub}>Shared a new recipe</Text>
-                </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.creatorNameRow}>
+            <Text style={styles.creatorName}>{post.creator}</Text>
+            <Ionicons name="checkmark-circle" size={16} color="#3B82F6" />
+          </View>
 
-                <Ionicons name="ellipsis-horizontal" size={22} color="#777" />
-              </TouchableOpacity>
-
-              {/* Recipe Image */}
-              <TouchableOpacity>
-                <Image source={{ uri: post.image }} style={styles.recipeImage} />
-              </TouchableOpacity>
-
-              {/* Content */}
-              <View style={styles.content}>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{post.diet}</Text>
-                </View>
-
-                <Text style={styles.recipeTitle}>{post.title}</Text>
-
-                <View style={styles.metaRow}>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={17} color="#777" />
-                    <Text style={styles.metaText}>{post.time}</Text>
-                  </View>
-
-                  <View style={styles.metaItem}>
-                    <Ionicons name="heart-outline" size={17} color="#777" />
-                    <Text style={styles.metaText}>{post.likes} likes</Text>
-                  </View>
-                </View>
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Ionicons name="heart-outline" size={22} color="#111" />
-                    <Text style={styles.actionText}>Like</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Ionicons name="bookmark-outline" size={22} color="#111" />
-                    <Text style={styles.actionText}>Save</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.viewButton}  onPress={() => router.push(`/community/post/${post.id}` as any)}>
-                    <Text style={styles.viewText}>View Recipe</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
+          <Text style={styles.creatorSub}>Shared a new recipe</Text>
         </View>
+
+        <Ionicons name="ellipsis-horizontal" size={22} color="#777" />
+      </TouchableOpacity>
+
+      {/* Recipe Image */}
+      <TouchableOpacity
+        onPress={() => router.push(`/community/post/${post.id}` as any)}
+      >
+        <Image
+          source={{
+            uri:
+              post.image ||
+              "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800",
+          }}
+          style={styles.recipeImage}
+        />
+      </TouchableOpacity>
+
+      {/* Content */}
+      <View style={styles.content}>
+        <View style={styles.tag}>
+          <Text style={styles.tagText}>{post.diet || "Recipe"}</Text>
+        </View>
+
+        <Text style={styles.recipeTitle}>{post.title}</Text>
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Ionicons name="time-outline" size={17} color="#777" />
+            <Text style={styles.metaText}>{post.cook_time || "25 mins"}</Text>
+          </View>
+
+          <View style={styles.metaItem}>
+            <Ionicons name="heart-outline" size={17} color="#777" />
+            <Text style={styles.metaText}>0 likes</Text>
+          </View>
+        </View>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="heart-outline" size={22} color="#111" />
+            <Text style={styles.actionText}>Like</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="bookmark-outline" size={22} color="#111" />
+            <Text style={styles.actionText}>Save</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={() => router.push(`/community/post/${post.id}` as any)}
+          >
+            <Text style={styles.viewText}>View Recipe</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  ))}
+</View>
 
         <View style={{ height: 30 }} />
       </ScrollView>
@@ -292,6 +314,11 @@ profileImage: {
     shadowRadius: 12,
     elevation: 4,
   },
+  creatorNameRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+},
 
   creatorRow: {
     flexDirection: "row",

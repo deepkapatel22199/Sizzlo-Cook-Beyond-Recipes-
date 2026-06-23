@@ -12,14 +12,54 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRecipe } from "./context/RecipeContext";
+import { API_URL } from "../services/api";
+
 
 export default function PreviewRecipe() {
   const { recipe, resetRecipe } = useRecipe();
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
 
-  const publishRecipe = () => {
-    setShowSuccessAlert(true);
-  };
+  const publishRecipe = async () => {
+  try {
+    const response = await fetch(`${API_URL}/recipes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: recipe.title,
+        description: recipe.description,
+        image: imageUri,
+        cook_time: recipe.cookTime,
+        difficulty: recipe.difficulty,
+        servings: String(recipe.servings),
+        diet: recipe.category,
+
+        ingredients: recipe.ingredients.map(
+          (item) => `${item.quantity} ${item.name}`
+        ),
+
+        steps: recipe.steps.map(
+          (step) => step.instruction
+        ),
+      }),
+    });
+
+    const data = await response.json();
+
+    console.log("Publish response:", data);
+
+    if (response.ok) {
+      setShowSuccessAlert(true);
+    } else {
+      console.log(data);
+      alert("Failed to publish recipe");
+    }
+  } catch (error) {
+    console.log("Publish error:", error);
+    alert("Something went wrong");
+  }
+};
 
   const closeAlert = () => {
     setShowSuccessAlert(false);

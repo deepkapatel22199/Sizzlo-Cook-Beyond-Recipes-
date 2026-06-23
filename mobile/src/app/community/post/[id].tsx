@@ -9,37 +9,62 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useEffect, useState } from "react";
+import { ActivityIndicator } from "react-native";
+import { API_URL } from "../../../services/api";
 
-const recipes = [
-  {
-    id: "1",
-    title: "Creamy Tomato Pasta",
-    creator: "Aarav Kitchen",
-    image:
-      "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=800",
-    avatar:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-    time: "25 mins",
-    difficulty: "Easy",
-    servings: "2 servings",
-    likes: 240,
-    description:
-      "A rich, creamy tomato pasta made with simple ingredients and perfect for a quick dinner.",
-    ingredients: ["Pasta", "Tomato sauce", "Garlic", "Cream", "Cheese"],
-    steps: [
-      "Boil pasta until soft.",
-      "Cook garlic with tomato sauce.",
-      "Add cream and mix well.",
-      "Add pasta into the sauce.",
-      "Top with cheese and serve hot.",
-    ],
-  },
-];
+type RecipeDetail = {
+  id: number;
+  title: string;
+  description: string;
+  image: string;
+  cook_time: string;
+  difficulty: string;
+  servings: string;
+  diet: string;
+  creator: string;
+  creator_id: number;
+  ingredients: string[];
+  steps: string[];
+};
 
 export default function RecipePostDetail() {
   const { id } = useLocalSearchParams();
+  const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const recipe = recipes.find((item) => item.id === id) || recipes[0];
+
+  useEffect(() => {
+  const fetchRecipe = async () => {
+    try {
+      const response = await fetch(`${API_URL}/recipes/${id}`);
+      const data = await response.json();
+      setRecipe(data);
+    } catch (error) {
+      console.log("Recipe detail error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchRecipe();
+}, [id]);
+
+if (loading) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <ActivityIndicator size="large" color="#F97316" style={{ marginTop: 60 }} />
+    </SafeAreaView>
+  );
+}
+
+if (!recipe) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text>Recipe not found</Text>
+    </SafeAreaView>
+  );
+}
 
   return (
     <SafeAreaView style={styles.container}>
@@ -63,9 +88,14 @@ export default function RecipePostDetail() {
           {/* Creator */}
           <TouchableOpacity
             style={styles.creatorRow}
-            onPress={() => router.push(`/community/profile/${recipe.id}` as any)}
+            onPress={() => router.push(`/community/profile/${recipe.creator_id}` as any)}
           >
-            <Image source={{ uri: recipe.avatar }} style={styles.avatar} />
+            <Image
+  source={{
+    uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
+  }}
+  style={styles.avatar}
+/>
 
             <View>
               <Text style={styles.creatorName}>{recipe.creator}</Text>
@@ -77,7 +107,7 @@ export default function RecipePostDetail() {
           <View style={styles.infoRow}>
             <View style={styles.infoCard}>
               <Ionicons name="time-outline" size={20} color="#F97316" />
-              <Text style={styles.infoText}>{recipe.time}</Text>
+              <Text style={styles.infoText}>{recipe.cook_time}</Text>
             </View>
 
             <View style={styles.infoCard}>
@@ -122,7 +152,7 @@ export default function RecipePostDetail() {
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.actionButton}>
               <Ionicons name="heart-outline" size={22} color="#111" />
-              <Text style={styles.actionText}>{recipe.likes} Likes</Text>
+              <Text style={styles.actionText}>0 Likes</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionButton}>
