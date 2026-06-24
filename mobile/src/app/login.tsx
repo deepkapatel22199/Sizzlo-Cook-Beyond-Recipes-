@@ -14,8 +14,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { API_URL } from "@/services/api";
+import * as SecureStore from "expo-secure-store";
 
-const API_URL = "http://10.0.2.2:8000";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -24,30 +25,37 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Missing Info", "Please enter email and password.");
-      return;
+  if (!email || !password) {
+    Alert.alert("Missing Info", "Please enter email and password.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+
+    if (data.access_token) {
+      await SecureStore.setItemAsync("token", data.access_token);
+      await SecureStore.setItemAsync("user_id",String(data.user_id));
+
+      const savedToken = await SecureStore.getItemAsync("token");
+      console.log("Saved token:", savedToken);
+
+      Alert.alert("Success", "Login successful");
+      router.replace("/home");
+    } else {
+      Alert.alert("Error", data.error || "Login failed");
     }
-
-    try {
-      const response = await fetch(`${API_URL}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (data.access_token) {
-        Alert.alert("Success", "Login successful");
-        router.replace("/home");
-      } else {
-        Alert.alert("Error", data.error || "Login failed");
-      }
-    } catch {
-      Alert.alert("Error", "Cannot connect to server");
-    }
-  };
+  } catch (error) {
+    console.log("Login error full:", error);
+    Alert.alert("Error", "Cannot connect to server");
+  }
+};
 
   return (
     <ImageBackground

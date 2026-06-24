@@ -13,6 +13,7 @@ import { RefreshControl } from "react-native";
 import {useEffect, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { API_URL } from "../../services/api";
+import * as SecureStore from "expo-secure-store";
 
 
 type RecipePost = {
@@ -32,6 +33,21 @@ export default function CommunityHomeFeed() {
   const [posts, setPosts] = useState<RecipePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState("");
+
+useEffect(() => {
+  const loadUser = async () => {
+    const id = await SecureStore.getItemAsync("user_id");
+
+    if (id) {
+      setCurrentUserId(id);
+    }
+
+    fetchRecipes();
+  };
+
+  loadUser();
+}, []);
 
 const fetchRecipes = async () => {
   try {
@@ -75,9 +91,14 @@ const onRefresh = () => {
       <Ionicons name="search-outline" size={22} color="#111" />
     </TouchableOpacity>
 
-    <TouchableOpacity
-  style={styles.creatorRow}
-  onPress={() => router.push("/community/profile/me" as any)}
+   <TouchableOpacity
+  style={styles.profileButton}
+  onPress={() =>
+  router.push({
+    pathname: "/community/profile/[id]",
+    params: { id: currentUserId },
+  })
+}
 >
       <Image
         source={{
@@ -125,13 +146,17 @@ const onRefresh = () => {
   {posts.map((post) => (
     <View key={post.id} style={styles.card}>
       {/* Creator Row */}
-      <TouchableOpacity
-        style={styles.creatorRow}
-        onPress={() => {
-          console.log("Creator clicked:", post.creator_id);
-          router.push(`/community/profile/${post.creator_id}` as any);
-        }}
-      >
+     <TouchableOpacity
+  style={styles.creatorRow}
+  onPress={() =>
+  router.push({
+    pathname: "/community/profile/[id]",
+    params: {
+      id: String(post.creator_id),
+    },
+  })
+}
+>
         <Image
           source={{
             uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",

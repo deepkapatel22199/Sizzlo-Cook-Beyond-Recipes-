@@ -38,7 +38,11 @@ useEffect(() => {
     try {
       const response = await fetch(`${API_URL}/users/${id}/profile`);
       const data = await response.json();
-      setCreator(data);
+
+console.log("PROFILE PAGE ID:", id);
+console.log("PROFILE DATA:", data);
+
+setCreator(data);
     } catch (error) {
       console.log("Profile error:", error);
     } finally {
@@ -99,7 +103,7 @@ if (!creator) {
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{creator.recipes_count}</Text>
+              <Text style={styles.statNumber}>{creator.recipes_count ?? 0}</Text>
               <Text style={styles.statLabel}>Recipes</Text>
             </View>
 
@@ -125,16 +129,29 @@ if (!creator) {
 
         {/* Recipe Grid */}
         <View style={styles.grid}>
-          {creator.recipes.map((post) => (
-  <TouchableOpacity
-    key={post.id}
-    style={styles.gridItem}
-    onPress={() => router.push(`/community/post/${post.id}` as any)}
-  >
-    <Image source={{ uri: post.image }} style={styles.gridImage} />
-  </TouchableOpacity>
-))}
-        </View>
+  {(creator?.recipes ?? []).map((post) => (
+    <TouchableOpacity
+      key={post.id}
+      style={styles.gridItem}
+      onPress={() => router.push(`/community/post/${post.id}` as any)}
+    >
+      <Image
+        source={{
+          uri:
+            post.image ||
+            "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800",
+        }}
+        style={styles.gridImage}
+      />
+
+      <View style={styles.overlay}>
+        <Text style={styles.gridTitle} numberOfLines={1}>
+          {post.title}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  ))}
+</View>
 
         <View style={{ height: 30 }} />
       </ScrollView>

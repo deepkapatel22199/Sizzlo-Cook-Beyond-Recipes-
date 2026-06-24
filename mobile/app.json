@@ -25,14 +25,15 @@
     },
     "plugins": [
       "expo-router",
-     [
-      "expo-splash-screen",
-      {
-        "backgroundColor": "#FFFDF8",
-        "image": "./assets/images/sizzlo-splash.png",
-        "imageWidth": 200
-      }
-    ]
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFDF8",
+          "image": "./assets/images/sizzlo-splash.png",
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

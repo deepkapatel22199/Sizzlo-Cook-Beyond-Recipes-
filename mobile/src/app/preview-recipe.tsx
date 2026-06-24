@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRecipe } from "./context/RecipeContext";
 import { API_URL } from "../services/api";
+import * as SecureStore from "expo-secure-store";
 
 
 export default function PreviewRecipe() {
@@ -21,27 +22,33 @@ export default function PreviewRecipe() {
 
   const publishRecipe = async () => {
   try {
+    const token = await SecureStore.getItem("token");
+    console.log("TOKEN:", token);
+
+    if (!token) {
+      alert("Please login first");
+      router.replace("/login");
+      return;
+    }
+
     const response = await fetch(`${API_URL}/recipes`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         title: recipe.title,
         description: recipe.description,
-        image: imageUri,
-        cook_time: recipe.cookTime,
+        image: recipe.photos[0] || "",
+        cook_time: `${recipe.cookTime} mins`,
         difficulty: recipe.difficulty,
-        servings: String(recipe.servings),
-        diet: recipe.category,
-
+        servings: recipe.servings,
+        diet: recipe.category || "Recipe",
         ingredients: recipe.ingredients.map(
           (item) => `${item.quantity} ${item.name}`
         ),
-
-        steps: recipe.steps.map(
-          (step) => step.instruction
-        ),
+        steps: recipe.steps.map((step) => step.instruction),
       }),
     });
 
@@ -60,6 +67,7 @@ export default function PreviewRecipe() {
     alert("Something went wrong");
   }
 };
+
 
   const closeAlert = () => {
     setShowSuccessAlert(false);
