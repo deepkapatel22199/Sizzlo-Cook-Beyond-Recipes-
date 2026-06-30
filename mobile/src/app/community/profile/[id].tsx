@@ -12,19 +12,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { API_URL } from "../../../services/api";
+import Avatar from "@/components/Avatar";
 
 type CreatorProfile = {
   id: number;
   name: string;
   email: string;
+  username: string;
   bio: string;
   avatar: string | null;
+  avatar_url: string | null;
   recipes_count: number;
   recipes: {
     id: number;
     title: string;
     image: string;
     diet: string;
+    cook_time: string;
+    difficulty: string;
   }[];
 };
 
@@ -88,17 +93,10 @@ if (!creator) {
 
         {/* Profile Info */}
         <View style={styles.profileSection}>
-          <Image
-  source={{
-    uri:
-      creator.avatar ||
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
-  }}
-  style={styles.avatar}
-/>
+          <Avatar avatarUrl={creator.avatar_url || creator.avatar} size={105} style={styles.avatar} />
 
           <Text style={styles.name}>{creator.name}</Text>
-          <Text style={styles.username}>{creator.name}</Text>
+          <Text style={styles.username}>@{creator.username}</Text>
           <Text style={styles.bio}>{creator.bio}</Text>
 
           <View style={styles.statsRow}>
@@ -196,9 +194,6 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 105,
-    height: 105,
-    borderRadius: 55,
     marginBottom: 14,
   },
 

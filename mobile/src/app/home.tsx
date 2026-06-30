@@ -114,7 +114,7 @@ export default function Home() {
         <NavItem icon="heart-outline" label="Saved" />
         <NavItem icon="restaurant-outline" label="AI Chef" />
         <NavItem icon="people-outline" label="Community" onPress={() => router.push("/community")}/>
-        <NavItem icon="person-outline" label="Profile" />
+        <NavItem icon="person-outline" label="Profile" onPress={() => router.push("/profile" as any)} />
       </View>
     </SafeAreaView>
   );

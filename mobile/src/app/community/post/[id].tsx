@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { API_URL } from "../../../services/api";
+import Avatar from "@/components/Avatar";
 
 type RecipeDetail = {
   id: number;
@@ -24,6 +25,7 @@ type RecipeDetail = {
   diet: string;
   creator: string;
   creator_id: number;
+  creator_avatar_url: string | null;
   ingredients: string[];
   steps: string[];
 };
@@ -90,12 +92,7 @@ if (!recipe) {
             style={styles.creatorRow}
             onPress={() => router.push(`/community/profile/${recipe.creator_id}` as any)}
           >
-            <Image
-  source={{
-    uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-  }}
-  style={styles.avatar}
-/>
+            <Avatar avatarUrl={recipe.creator_avatar_url} size={48} style={styles.avatar} />
 
             <View>
               <Text style={styles.creatorName}>{recipe.creator}</Text>
@@ -217,9 +214,6 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     marginRight: 12,
   },
 

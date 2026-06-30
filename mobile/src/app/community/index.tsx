@@ -10,10 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RefreshControl } from "react-native";
-import {useEffect, useState } from "react";
+import {useCallback, useEffect, useState } from "react";
 import { ActivityIndicator } from "react-native";
 import { API_URL } from "../../services/api";
 import * as SecureStore from "expo-secure-store";
+import { useFocusEffect } from "expo-router";
+import { getMyProfile } from "@/api/profileApi";
+import Avatar from "@/components/Avatar";
 
 
 type RecipePost = {
@@ -27,27 +30,14 @@ type RecipePost = {
   diet: string;
   creator: string;
   creator_id: number;
+  creator_avatar_url: string | null;
 };
 
 export default function CommunityHomeFeed() {
   const [posts, setPosts] = useState<RecipePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState("");
-
-useEffect(() => {
-  const loadUser = async () => {
-    const id = await SecureStore.getItemAsync("user_id");
-
-    if (id) {
-      setCurrentUserId(id);
-    }
-
-    fetchRecipes();
-  };
-
-  loadUser();
-}, []);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
 
 const fetchRecipes = async () => {
   try {
@@ -62,13 +52,34 @@ const fetchRecipes = async () => {
   }
 };
 
+const fetchCurrentUserProfile = async () => {
+  try {
+    const token = await SecureStore.getItemAsync("token");
+
+    if (!token) return;
+
+    const profile = await getMyProfile(token);
+    setCurrentUserAvatar(profile.avatar_url);
+  } catch (error) {
+    console.log("Current user profile error:", error);
+  }
+};
+
 useEffect(() => {
   fetchRecipes();
+  fetchCurrentUserProfile();
 }, []);
+
+useFocusEffect(
+  useCallback(() => {
+    fetchCurrentUserProfile();
+  }, [])
+);
 
 const onRefresh = () => {
   setRefreshing(true);
   fetchRecipes();
+  fetchCurrentUserProfile();
 };
 
 
@@ -93,19 +104,9 @@ const onRefresh = () => {
 
    <TouchableOpacity
   style={styles.profileButton}
-  onPress={() =>
-  router.push({
-    pathname: "/community/profile/[id]",
-    params: { id: currentUserId },
-  })
-}
+  onPress={() => router.push("/profile" as any)}
 >
-      <Image
-        source={{
-          uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-        }}
-        style={styles.profileImage}
-      />
+      <Avatar avatarUrl={currentUserAvatar} size={46} />
     </TouchableOpacity>
   </View>
 </View>
@@ -157,12 +158,7 @@ const onRefresh = () => {
   })
 }
 >
-        <Image
-          source={{
-            uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-          }}
-          style={styles.avatar}
-        />
+        <Avatar avatarUrl={post.creator_avatar_url} size={46} style={styles.avatar} />
 
         <View style={{ flex: 1 }}>
           <View style={styles.creatorNameRow}>
@@ -310,11 +306,6 @@ profileButton: {
   backgroundColor: "#FFF",
 },
 
-profileImage: {
-  width: "100%",
-  height: "100%",
-},
-
   categoryText: {
     fontSize: 14,
     fontWeight: "600",
@@ -352,9 +343,6 @@ profileImage: {
   },
 
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
     marginRight: 12,
   },
 
