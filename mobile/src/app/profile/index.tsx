@@ -1,30 +1,34 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
-import { getMyProfile, UserProfile } from "@/api/profileApi";
+import { getMyProfile, ProfileRecipe, UserProfile } from "@/api/profileApi";
 import Avatar from "@/components/Avatar";
+import { getRecipeImageUrl } from "@/api/recipeImageApi";
 
-type MenuItem = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  danger?: boolean;
-  onPress?: () => void;
-};
+const GRID_GAP = 4;
+const GRID_HORIZONTAL_PADDING = 20;
 
 export default function Profile() {
+  const { width } = useWindowDimensions();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const gridItemSize = useMemo(() => {
+    return (width - GRID_HORIZONTAL_PADDING * 2 - GRID_GAP * 2) / 3;
+  }, [width]);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -52,29 +56,32 @@ export default function Profile() {
     }, [loadProfile])
   );
 
-  const handleLogout = async () => {
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user_id");
-    router.replace("/login");
-  };
+  const renderRecipeTile = (recipe: ProfileRecipe) => {
+    const imageUri = getRecipeImageUrl(recipe.image);
 
-  const menuItems: MenuItem[] = [
-    {
-      label: "My Recipes",
-      icon: "restaurant-outline",
-      onPress: () => router.push("/profile/my-recipes" as any),
-    },
-    { label: "Saved Recipes", icon: "bookmark-outline" },
-    { label: "Settings", icon: "settings-outline" },
-    { label: "Help & Support", icon: "help-circle-outline" },
-    { label: "Privacy Policy", icon: "shield-checkmark-outline" },
-    {
-      label: "Logout",
-      icon: "log-out-outline",
-      danger: true,
-      onPress: handleLogout,
-    },
-  ];
+    return (
+      <TouchableOpacity
+        key={recipe.id}
+        activeOpacity={0.85}
+        style={[styles.gridItem, { width: gridItemSize }]}
+        onPress={() => router.push(`/community/post/${recipe.id}` as any)}
+      >
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.gridImage} />
+        ) : (
+          <View style={styles.recipePlaceholder}>
+            <Ionicons name="restaurant-outline" size={28} color="#F97316" />
+          </View>
+        )}
+
+        <View style={styles.recipeTitleOverlay}>
+          <Text style={styles.recipeTitle} numberOfLines={1}>
+            {recipe.title}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -94,6 +101,8 @@ export default function Profile() {
     );
   }
 
+  const recipes = profile.recipes ?? [];
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -104,13 +113,16 @@ export default function Profile() {
 
           <Text style={styles.headerTitle}>Profile</Text>
 
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push("/profile/settings" as any)}
+          >
             <Ionicons name="settings-outline" size={23} color="#111" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.profileSection}>
-          <Avatar avatarUrl={profile.avatar_url} size={118} style={styles.avatar} />
+          <Avatar avatarUrl={profile.avatar_url} size={104} style={styles.avatar} />
 
           <Text style={styles.name}>{profile.name}</Text>
           <Text style={styles.username}>@{profile.username}</Text>
@@ -118,56 +130,54 @@ export default function Profile() {
 
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{profile.recipes_count}</Text>
+              <Text style={styles.statNumber}>{profile.recipes_count ?? recipes.length}</Text>
               <Text style={styles.statLabel}>Recipes</Text>
             </View>
 
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{profile.saved_count}</Text>
-              <Text style={styles.statLabel}>Saved</Text>
+              <Text style={styles.statNumber}>{profile.followers_count ?? 0}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{profile.following_count ?? 0}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{profile.likes_count ?? 0}</Text>
+              <Text style={styles.statLabel}>Likes</Text>
             </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => router.push("/profile/edit-profile" as any)}
-          >
-            <Ionicons name="create-outline" size={19} color="#FFF" />
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
 
-        <View style={styles.menu}>
-          {menuItems.map((item) => (
-            <TouchableOpacity key={item.label} style={styles.menuCard} onPress={item.onPress}>
-              <View
-                style={[
-                  styles.menuIcon,
-                  item.danger && styles.menuIconDanger,
-                ]}
-              >
-                <Ionicons
-                  name={item.icon}
-                  size={22}
-                  color={item.danger ? "#DC2626" : "#075B34"}
-                />
-              </View>
+        <View style={styles.tabRow}>
+          <View style={styles.activeTab}>
+            <Ionicons name="grid-outline" size={20} color="#F97316" />
+            <Text style={styles.activeTabText}>Recipes</Text>
+          </View>
+        </View>
 
-              <Text
-                style={[
-                  styles.menuText,
-                  item.danger && styles.menuTextDanger,
-                ]}
-              >
-                {item.label}
-              </Text>
-
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        {recipes.length > 0 ? (
+          <View style={styles.grid}>{recipes.map(renderRecipeTile)}</View>
+        ) : (
+          <View style={styles.emptyRecipeState}>
+            <View style={styles.emptyRecipeIcon}>
+              <Ionicons name="restaurant-outline" size={34} color="#F97316" />
+            </View>
+            <Text style={styles.emptyRecipeTitle}>No recipes yet</Text>
+            <Text style={styles.emptyRecipeText}>Publish your first recipe and it will appear here.</Text>
+            <TouchableOpacity
+              style={styles.createRecipeButton}
+              onPress={() => router.push("/create-recipe" as any)}
+            >
+              <Ionicons name="add" size={20} color="#FFF" />
+              <Text style={styles.createRecipeButtonText}>Create Recipe</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
+        )}
 
-        <View style={{ height: 30 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -182,7 +192,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -209,16 +219,19 @@ const styles = StyleSheet.create({
 
   profileSection: {
     alignItems: "center",
-    paddingHorizontal: 22,
-    paddingBottom: 22,
+    paddingHorizontal: 20,
+    paddingBottom: 18,
   },
 
   avatar: {
-    marginBottom: 15,
+    marginBottom: 13,
+    backgroundColor: "#FFF",
+    borderWidth: 3,
+    borderColor: "#FFF",
   },
 
   name: {
-    fontSize: 27,
+    fontSize: 26,
     fontWeight: "800",
     color: "#111",
   },
@@ -227,7 +240,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
     marginTop: 4,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
   bio: {
@@ -235,71 +248,119 @@ const styles = StyleSheet.create({
     color: "#555",
     textAlign: "center",
     lineHeight: 22,
-    marginTop: 12,
-    marginBottom: 20,
+    marginTop: 10,
+    marginBottom: 18,
     maxWidth: 320,
   },
 
   statsRow: {
     flexDirection: "row",
     width: "100%",
-    gap: 12,
-    marginBottom: 16,
-  },
-
-  statBox: {
-    flex: 1,
     backgroundColor: "#FFF",
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: "center",
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginBottom: 14,
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
   },
 
+  statBox: {
+    flex: 1,
+    alignItems: "center",
+  },
+
   statNumber: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "800",
     color: "#111",
   },
 
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#777",
     marginTop: 4,
     fontWeight: "700",
   },
 
-  editButton: {
-    height: 50,
-    width: "100%",
-    borderRadius: 18,
-    backgroundColor: "#075B34",
+  tabRow: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "#EFE7DD",
+    backgroundColor: "#FAF7F2",
+    alignItems: "center",
+  },
+
+  activeTab: {
+    minHeight: 46,
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 7,
+    borderBottomWidth: 2,
+    borderBottomColor: "#F97316",
   },
 
-  editButtonText: {
-    color: "#FFF",
-    fontSize: 15,
+  activeTabText: {
+    color: "#111",
+    fontSize: 13,
     fontWeight: "800",
   },
 
-  menu: {
-    paddingHorizontal: 20,
-    gap: 12,
+  grid: {
+    paddingHorizontal: GRID_HORIZONTAL_PADDING,
+    paddingTop: GRID_GAP,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: GRID_GAP,
   },
 
-  menuCard: {
-    minHeight: 62,
-    borderRadius: 20,
+  gridItem: {
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: "hidden",
     backgroundColor: "#FFF",
-    paddingHorizontal: 16,
-    flexDirection: "row",
+  },
+
+  gridImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  recipePlaceholder: {
+    flex: 1,
+    backgroundColor: "#FFF3E8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  recipeTitleOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    minHeight: 32,
+    paddingHorizontal: 7,
+    paddingVertical: 7,
+    backgroundColor: "rgba(0,0,0,0.52)",
+  },
+
+  recipeTitle: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  emptyRecipeState: {
+    marginHorizontal: 20,
+    marginTop: 22,
+    backgroundColor: "#FFF",
+    borderRadius: 22,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
     alignItems: "center",
     shadowColor: "#000",
     shadowOpacity: 0.05,
@@ -307,29 +368,48 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  menuIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: "#EEF7EE",
+  emptyRecipeIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 22,
+    backgroundColor: "#FFF3E8",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
+    marginBottom: 14,
   },
 
-  menuIconDanger: {
-    backgroundColor: "#FEE2E2",
-  },
-
-  menuText: {
-    flex: 1,
-    fontSize: 15,
+  emptyRecipeTitle: {
+    fontSize: 17,
     fontWeight: "800",
     color: "#111",
+    textAlign: "center",
+    lineHeight: 24,
   },
 
-  menuTextDanger: {
-    color: "#DC2626",
+  emptyRecipeText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 21,
+    marginTop: 8,
+    marginBottom: 18,
+  },
+
+  createRecipeButton: {
+    height: 46,
+    paddingHorizontal: 18,
+    borderRadius: 15,
+    backgroundColor: "#075B34",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+
+  createRecipeButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
 
   emptyState: {

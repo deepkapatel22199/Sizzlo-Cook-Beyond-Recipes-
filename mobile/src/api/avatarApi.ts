@@ -6,6 +6,18 @@ type AvatarUploadResponse = {
   avatar_url: string;
 };
 
+function createImageUploadFormData(uri: string, fileName: string, fileType: string) {
+  const formData = new FormData();
+
+  formData.append("file", {
+    uri,
+    name: fileName,
+    type: fileType,
+  } as any);
+
+  return formData;
+}
+
 export async function pickAndUploadAvatar(token: string): Promise<AvatarUploadResponse | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -27,14 +39,7 @@ export async function pickAndUploadAvatar(token: string): Promise<AvatarUploadRe
   const image = result.assets[0];
   const fileName = image.fileName || "avatar.jpg";
   const fileType = image.mimeType || "image/jpeg";
-
-  const formData = new FormData();
-
-  formData.append("file", {
-    uri: image.uri,
-    name: fileName,
-    type: fileType,
-  } as any);
+  const formData = createImageUploadFormData(image.uri, fileName, fileType);
 
   const response = await fetch(`${API_URL}/users/me/avatar`, {
     method: "POST",

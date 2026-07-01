@@ -11,7 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useRecipe } from "./context/RecipeContext";
+import { useRecipe } from "@/contexts/RecipeContext";
 
 type RecipeStep = {
   id: string;

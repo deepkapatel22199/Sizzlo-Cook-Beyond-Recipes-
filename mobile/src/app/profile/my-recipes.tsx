@@ -14,9 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from "expo-secure-store";
 import { getMyProfile, ProfileRecipe } from "@/api/profileApi";
-
-const RECIPE_FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800";
+import { getRecipeImageUrl } from "@/api/recipeImageApi";
 
 export default function MyRecipes() {
   const [recipes, setRecipes] = useState<ProfileRecipe[]>([]);
@@ -72,16 +70,22 @@ export default function MyRecipes() {
               <Text style={styles.emptyTitle}>You haven't published any recipes yet.</Text>
             </View>
           ) : (
-            recipes.map((recipe) => (
-              <TouchableOpacity
-                key={recipe.id}
-                style={styles.recipeCard}
-                onPress={() => router.push(`/community/post/${recipe.id}` as any)}
-              >
-                <Image
-                  source={{ uri: recipe.image || RECIPE_FALLBACK_IMAGE }}
-                  style={styles.recipeImage}
-                />
+            recipes.map((recipe) => {
+              const imageUri = getRecipeImageUrl(recipe.image);
+
+              return (
+                <TouchableOpacity
+                  key={recipe.id}
+                  style={styles.recipeCard}
+                  onPress={() => router.push(`/community/post/${recipe.id}` as any)}
+                >
+                  {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={styles.recipeImage} />
+                  ) : (
+                    <View style={styles.recipeImagePlaceholder}>
+                      <Ionicons name="restaurant-outline" size={36} color="#F97316" />
+                    </View>
+                  )}
 
                 <View style={styles.recipeInfo}>
                   <View style={styles.tag}>
@@ -102,8 +106,9 @@ export default function MyRecipes() {
                     </View>
                   </View>
                 </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              );
+            })
           )}
 
           <View style={{ height: 30 }} />
@@ -171,6 +176,14 @@ const styles = StyleSheet.create({
   recipeImage: {
     width: "100%",
     height: 190,
+  },
+
+  recipeImagePlaceholder: {
+    width: "100%",
+    height: 190,
+    backgroundColor: "#FFF3E8",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   recipeInfo: {

@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRecipe } from "./context/RecipeContext";
+import { useRecipe } from "@/contexts/RecipeContext";
 
 export default function UploadPhotos() {
     const { updateRecipe } = useRecipe();
@@ -33,7 +33,9 @@ export default function UploadPhotos() {
     });
 
     if (!result.canceled) {
-      const selectedImages = result.assets.map((asset) => asset.uri);
+      const selectedImages = result.assets
+        .map((asset) => asset.uri?.trim())
+        .filter((uri): uri is string => Boolean(uri));
       setPhotos((prev) => [...prev, ...selectedImages]);
     }
   };
@@ -43,10 +45,11 @@ export default function UploadPhotos() {
   };
 
   const goNext = () => {
-    // if (photos.length === 0) {
-    //   Alert.alert("Add Photos", "Please upload at least one recipe photo.");
-    //   return;
-    // }
+    if (photos.length === 0) {
+      Alert.alert("Add Photos", "Please upload at least one recipe photo.");
+      return;
+    }
+
     updateRecipe({
         photos,
     });

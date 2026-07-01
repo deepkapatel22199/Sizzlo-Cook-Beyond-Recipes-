@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import {
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -11,8 +12,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
 import { ActivityIndicator } from "react-native";
-import { API_URL } from "../../../services/api";
+import { API_URL } from "@/services/api";
 import Avatar from "@/components/Avatar";
+import { getRecipeImageUrl } from "@/api/recipeImageApi";
+import * as SecureStore from "expo-secure-store";
+import { followUser, unfollowUser } from "@/api/socialApi";
+import { createChat } from "@/api/chatApi";
 
 type CreatorProfile = {
   id: number;
@@ -23,10 +28,14 @@ type CreatorProfile = {
   avatar: string | null;
   avatar_url: string | null;
   recipes_count: number;
+  followers_count: number;
+  following_count: number;
+  likes_count: number;
+  is_following: boolean;
   recipes: {
     id: number;
     title: string;
-    image: string;
+    image: string | null;
     diet: string;
     cook_time: string;
     difficulty: string;
@@ -37,15 +46,28 @@ export default function CreatorProfile() {
  const { id } = useLocalSearchParams();
 const [creator, setCreator] = useState<CreatorProfile | null>(null);
 const [loading, setLoading] = useState(true);
+const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
 useEffect(() => {
   const fetchProfile = async () => {
     try {
-      const response = await fetch(`${API_URL}/users/${id}/profile`);
-      const data = await response.json();
+      const token = await SecureStore.getItemAsync("token");
+      const storedUserId = await SecureStore.getItemAsync("user_id");
+      const headers: HeadersInit = {};
 
-console.log("PROFILE PAGE ID:", id);
-console.log("PROFILE DATA:", data);
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      setCurrentUserId(storedUserId);
+
+      if (storedUserId && String(storedUserId) === String(id)) {
+        router.replace("/profile" as any);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/users/${id}/profile`, { headers });
+      const data = await response.json();
 
 setCreator(data);
     } catch (error) {
@@ -57,6 +79,54 @@ setCreator(data);
 
   fetchProfile();
 }, [id]);
+
+const handleToggleFollow = async () => {
+  if (!creator) return;
+
+  try {
+    const token = await SecureStore.getItemAsync("token");
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const state = creator.is_following
+      ? await unfollowUser(token, creator.id)
+      : await followUser(token, creator.id);
+
+    setCreator((currentCreator) =>
+      currentCreator
+        ? {
+            ...currentCreator,
+            followers_count: state.followers_count,
+            following_count: state.following_count,
+            is_following: state.is_following,
+          }
+        : currentCreator
+    );
+  } catch (error: any) {
+    Alert.alert("Error", error.message || "Unable to update follow.");
+  }
+};
+
+const handleStartChat = async () => {
+  if (!creator) return;
+
+  try {
+    const token = await SecureStore.getItemAsync("token");
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const chat = await createChat(token, creator.id);
+    router.push(`/chat/${chat.id}` as any);
+  } catch (error: any) {
+    Alert.alert("Error", error.message || "Unable to start chat.");
+  }
+};
 
 if (loading) {
   return (
@@ -99,6 +169,24 @@ if (!creator) {
           <Text style={styles.username}>@{creator.username}</Text>
           <Text style={styles.bio}>{creator.bio}</Text>
 
+          {String(currentUserId) !== String(creator.id) && (
+            <View style={styles.profileActions}>
+              <TouchableOpacity
+                style={[styles.followButton, creator.is_following && styles.followingButton]}
+                onPress={handleToggleFollow}
+              >
+                <Text style={[styles.followButtonText, creator.is_following && styles.followingButtonText]}>
+                  {creator.is_following ? "Following" : "Follow"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.messageButton} onPress={handleStartChat}>
+                <Ionicons name="chatbubble-outline" size={18} color="#111" />
+                <Text style={styles.messageButtonText}>Message</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>{creator.recipes_count ?? 0}</Text>
@@ -106,13 +194,18 @@ if (!creator) {
             </View>
 
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Likes</Text>
+              <Text style={styles.statNumber}>{creator.followers_count ?? 0}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
             </View>
 
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Views</Text>
+              <Text style={styles.statNumber}>{creator.following_count ?? 0}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{creator.likes_count ?? 0}</Text>
+              <Text style={styles.statLabel}>Likes</Text>
             </View>
           </View>
         </View>
@@ -127,20 +220,22 @@ if (!creator) {
 
         {/* Recipe Grid */}
         <View style={styles.grid}>
-  {(creator?.recipes ?? []).map((post) => (
-    <TouchableOpacity
-      key={post.id}
-      style={styles.gridItem}
-      onPress={() => router.push(`/community/post/${post.id}` as any)}
-    >
-      <Image
-        source={{
-          uri:
-            post.image ||
-            "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800",
-        }}
-        style={styles.gridImage}
-      />
+  {(creator?.recipes ?? []).map((post) => {
+    const imageUri = getRecipeImageUrl(post.image);
+
+    return (
+      <TouchableOpacity
+        key={post.id}
+        style={styles.gridItem}
+        onPress={() => router.push(`/community/post/${post.id}` as any)}
+      >
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.gridImage} />
+      ) : (
+        <View style={styles.gridPlaceholder}>
+          <Ionicons name="restaurant-outline" size={30} color="#F97316" />
+        </View>
+      )}
 
       <View style={styles.overlay}>
         <Text style={styles.gridTitle} numberOfLines={1}>
@@ -148,7 +243,8 @@ if (!creator) {
         </Text>
       </View>
     </TouchableOpacity>
-  ))}
+    );
+  })}
 </View>
 
         <View style={{ height: 30 }} />
@@ -217,6 +313,50 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 20,
   },
+  profileActions: {
+    flexDirection: "row",
+    width: "100%",
+    gap: 10,
+    marginBottom: 18,
+  },
+  followButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: "#F97316",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  followingButton: {
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  followButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  followingButtonText: {
+    color: "#111",
+  },
+  messageButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  messageButtonText: {
+    color: "#111",
+    fontSize: 14,
+    fontWeight: "800",
+  },
 
   statsRow: {
     flexDirection: "row",
@@ -270,13 +410,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: 4,
   },
 
   gridItem: {
-    width: "48%",
-    height: 180,
-    borderRadius: 22,
+    width: "32.6%",
+    aspectRatio: 1,
+    borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#FFF",
   },
@@ -284,6 +424,14 @@ const styles = StyleSheet.create({
   gridImage: {
     width: "100%",
     height: "100%",
+  },
+
+  gridPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#FFF3E8",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   overlay: {

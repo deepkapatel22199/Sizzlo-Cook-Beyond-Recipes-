@@ -11,25 +11,73 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRecipe } from "./context/RecipeContext";
-import { API_URL } from "../services/api";
+import { useRecipe } from "@/contexts/RecipeContext";
+import { API_URL } from "@/services/api";
 import * as SecureStore from "expo-secure-store";
+import * as FileSystem from "expo-file-system/legacy";
+
+type RecipeImageUploadResponse = {
+  message: string;
+  image_url: string;
+};
+
+async function uploadRecipeCover(token: string, imageUri: string) {
+  const trimmedImageUri = imageUri.trim();
+
+  if (!trimmedImageUri || trimmedImageUri.startsWith("http")) {
+    return null;
+  }
+
+  const uploadResult = await FileSystem.uploadAsync(
+    `${API_URL}/recipes/image`,
+    trimmedImageUri,
+    {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "file",
+      mimeType: "image/jpeg",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const data = JSON.parse(uploadResult.body) as
+    | RecipeImageUploadResponse
+    | { detail?: string };
+
+  if (uploadResult.status < 200 || uploadResult.status >= 300) {
+    throw new Error(
+      "detail" in data
+        ? data.detail || "Recipe image upload failed"
+        : "Recipe image upload failed"
+    );
+  }
+
+  return (data as RecipeImageUploadResponse).image_url;
+}
 
 
 export default function PreviewRecipe() {
   const { recipe, resetRecipe } = useRecipe();
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
+  const imageUri = recipe.photos[0]?.trim() || null;
 
   const publishRecipe = async () => {
   try {
-    const token = await SecureStore.getItem("token");
-    console.log("TOKEN:", token);
+    const token = await SecureStore.getItemAsync("token");
 
     if (!token) {
       alert("Please login first");
       router.replace("/login");
       return;
     }
+
+    const uploadedImageUrl = imageUri?.startsWith("http")
+      ? imageUri
+      : imageUri
+        ? await uploadRecipeCover(token, imageUri)
+        : null;
 
     const response = await fetch(`${API_URL}/recipes`, {
       method: "POST",
@@ -40,7 +88,7 @@ export default function PreviewRecipe() {
       body: JSON.stringify({
         title: recipe.title,
         description: recipe.description,
-        image: recipe.photos[0] || "",
+        image: uploadedImageUrl,
         cook_time: `${recipe.cookTime} mins`,
         difficulty: recipe.difficulty,
         servings: recipe.servings,
@@ -60,11 +108,11 @@ export default function PreviewRecipe() {
       setShowSuccessAlert(true);
     } else {
       console.log(data);
-      alert("Failed to publish recipe");
+      alert(data.detail || data.error || "Failed to publish recipe");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.log("Publish error:", error);
-    alert("Something went wrong");
+    alert(error.message || "Something went wrong");
   }
 };
 
@@ -74,12 +122,6 @@ export default function PreviewRecipe() {
     resetRecipe();
     router.push("/home");
   };
-
-  const imageUri =
-    recipe.photos.length > 0
-      ? recipe.photos[0]
-      : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -107,10 +149,13 @@ export default function PreviewRecipe() {
 
         {/* Image */}
         <View style={styles.imageCard}>
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.recipeImage}
-          />
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.recipeImage} />
+          ) : (
+            <View style={styles.recipeImagePlaceholder}>
+              <Ionicons name="restaurant-outline" size={42} color="#F97316" />
+            </View>
+          )}
 
           <View style={styles.imageOverlay}>
             <Text style={styles.recipeTitle}>{recipe.title}</Text>
@@ -255,6 +300,14 @@ const styles = StyleSheet.create({
   recipeImage: {
     width: "100%",
     height: "100%",
+  },
+
+  recipeImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#FFF3E8",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   imageOverlay: {

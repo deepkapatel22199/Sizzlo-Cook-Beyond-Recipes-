@@ -7,6 +7,10 @@ export type ProfileRecipe = {
   diet: string | null;
   cook_time: string | null;
   difficulty: string | null;
+  likes_count?: number;
+  comments_count?: number;
+  is_liked?: boolean;
+  is_saved?: boolean;
 };
 
 export type UserProfile = {
@@ -19,6 +23,10 @@ export type UserProfile = {
   avatar?: string | null;
   recipes_count: number;
   saved_count: number;
+  followers_count?: number;
+  following_count?: number;
+  likes_count?: number;
+  is_following?: boolean;
   recipes: ProfileRecipe[];
 };
 

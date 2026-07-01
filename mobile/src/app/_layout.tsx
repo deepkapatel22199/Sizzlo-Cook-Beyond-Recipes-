@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { RecipeProvider } from "./context/RecipeContext";
+import { RecipeProvider } from "@/contexts/RecipeContext";
 
 export default function RootLayout() {
   return (
