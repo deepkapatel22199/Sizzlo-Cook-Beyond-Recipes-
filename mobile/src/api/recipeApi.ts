@@ -5,6 +5,8 @@ export type RecipePayload = {
   title?: string;
   description?: string;
   image?: string | null;
+  photos?: string[];
+  category?: string;
   cook_time?: string;
   difficulty?: string;
   servings?: string;
@@ -18,10 +20,13 @@ export type RecipeDetail = {
   title: string;
   description: string | null;
   image: string | null;
+  photos: string[];
+  category: string;
   cook_time: string | null;
   difficulty: string | null;
   servings: string | null;
   diet: string | null;
+  created_at?: string;
   creator: Creator;
   creator_name?: string;
   creator_id: number;

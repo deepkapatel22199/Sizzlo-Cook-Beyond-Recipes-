@@ -1,4 +1,5 @@
 import { API_URL } from "@/services/api";
+import { File } from "expo-file-system";
 
 type RecipeImageUploadResponse = {
   message: string;
@@ -42,18 +43,6 @@ function getMimeTypeFromFileName(fileName: string) {
   return "image/jpeg";
 }
 
-function createImageUploadFormData(uri: string, fileName: string, fileType: string) {
-  const formData = new FormData();
-
-  formData.append("file", {
-    uri,
-    name: fileName,
-    type: fileType,
-  } as any);
-
-  return formData;
-}
-
 export function getRecipeImageUrl(imageUrl?: string | null) {
   const trimmedImageUrl = imageUrl?.trim();
 
@@ -87,8 +76,9 @@ export async function uploadRecipeImage(
   }
 
   const fileName = getFileNameFromUri(trimmedImageUri);
-  const fileType = getMimeTypeFromFileName(fileName);
-  const formData = createImageUploadFormData(trimmedImageUri, fileName, fileType);
+  const file = new File(trimmedImageUri);
+  const formData = new FormData();
+  formData.append("file", file as any, fileName);
 
   const response = await fetch(`${API_URL}/recipes/image`, {
     method: "POST",
@@ -98,7 +88,13 @@ export async function uploadRecipeImage(
     body: formData,
   });
 
-  return parseUploadResponse(response);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || data.error || "Recipe image upload failed");
+  }
+
+  return data as RecipeImageUploadResponse;
 }
 
 export async function updateRecipeImage(
@@ -113,8 +109,9 @@ export async function updateRecipeImage(
   }
 
   const fileName = getFileNameFromUri(trimmedImageUri);
-  const fileType = getMimeTypeFromFileName(fileName);
-  const formData = createImageUploadFormData(trimmedImageUri, fileName, fileType);
+  const file = new File(trimmedImageUri);
+  const formData = new FormData();
+  formData.append("file", file as any, fileName);
 
   const response = await fetch(`${API_URL}/recipes/${recipeId}/image`, {
     method: "PUT",
@@ -124,5 +121,11 @@ export async function updateRecipeImage(
     body: formData,
   });
 
-  return parseUploadResponse(response);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || data.error || "Recipe image upload failed");
+  }
+
+  return data as RecipeImageUploadResponse;
 }

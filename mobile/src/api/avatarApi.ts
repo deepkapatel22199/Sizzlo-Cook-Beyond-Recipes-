@@ -1,22 +1,11 @@
 import * as ImagePicker from "expo-image-picker";
 import { API_URL } from "@/services/api";
+import { File } from "expo-file-system";
 
 type AvatarUploadResponse = {
   message: string;
   avatar_url: string;
 };
-
-function createImageUploadFormData(uri: string, fileName: string, fileType: string) {
-  const formData = new FormData();
-
-  formData.append("file", {
-    uri,
-    name: fileName,
-    type: fileType,
-  } as any);
-
-  return formData;
-}
 
 export async function pickAndUploadAvatar(token: string): Promise<AvatarUploadResponse | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -38,8 +27,9 @@ export async function pickAndUploadAvatar(token: string): Promise<AvatarUploadRe
 
   const image = result.assets[0];
   const fileName = image.fileName || "avatar.jpg";
-  const fileType = image.mimeType || "image/jpeg";
-  const formData = createImageUploadFormData(image.uri, fileName, fileType);
+  const file = new File(image.uri);
+  const formData = new FormData();
+  formData.append("file", file as any, fileName);
 
   const response = await fetch(`${API_URL}/users/me/avatar`, {
     method: "POST",
@@ -55,7 +45,7 @@ export async function pickAndUploadAvatar(token: string): Promise<AvatarUploadRe
     throw new Error(data.detail || "Avatar upload failed");
   }
 
-  return data;
+  return data as AvatarUploadResponse;
 }
 
 export function getAvatarUrl(avatarUrl?: string | null) {

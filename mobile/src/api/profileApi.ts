@@ -4,9 +4,12 @@ export type ProfileRecipe = {
   id: number;
   title: string;
   image: string | null;
+  photos?: string[];
+  category: string;
   diet: string | null;
   cook_time: string | null;
   difficulty: string | null;
+  created_at?: string;
   likes_count?: number;
   comments_count?: number;
   is_liked?: boolean;

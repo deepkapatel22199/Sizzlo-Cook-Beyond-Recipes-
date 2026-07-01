@@ -75,6 +75,13 @@ export default function ChatListScreen() {
                   {chat.last_message || "No messages yet"}
                 </Text>
               </View>
+              {chat.unread_count > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {chat.unread_count > 99 ? "99+" : chat.unread_count}
+                  </Text>
+                </View>
+              )}
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
           ))}
@@ -140,6 +147,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#777",
     marginTop: 4,
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: "#F97316",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFF",
   },
   emptyState: {
     flex: 1,

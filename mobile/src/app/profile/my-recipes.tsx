@@ -87,9 +87,9 @@ export default function MyRecipes() {
                     </View>
                   )}
 
-                <View style={styles.recipeInfo}>
+                  <View style={styles.recipeInfo}>
                   <View style={styles.tag}>
-                    <Text style={styles.tagText}>{recipe.diet || "Recipe"}</Text>
+                    <Text style={styles.tagText}>{recipe.category || recipe.diet || "Other"}</Text>
                   </View>
 
                   <Text style={styles.recipeTitle}>{recipe.title}</Text>

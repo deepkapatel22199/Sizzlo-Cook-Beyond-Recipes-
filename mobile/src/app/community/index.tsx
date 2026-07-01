@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Avatar from "@/components/Avatar";
 import { getRecipeImageUrl } from "@/api/recipeImageApi";
+import { HOME_RECIPE_CATEGORIES } from "@/constants/recipeCategories";
 import {
   addRecipeComment,
   getCommunityRecipes,
@@ -31,9 +32,38 @@ import {
   unlikeRecipe,
   unsaveRecipe,
 } from "@/api/socialApi";
+import { getChats } from "@/api/chatApi";
 import * as SecureStore from "expo-secure-store";
 
+const CATEGORY_OPTIONS = ["All", ...HOME_RECIPE_CATEGORIES];
+
 function CommunityBottomNav() {
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchUnreadChatCount = async () => {
+        const storedToken = await SecureStore.getItemAsync("token");
+
+        if (!storedToken) {
+          setUnreadChatCount(0);
+          return;
+        }
+
+        try {
+          const chats = await getChats(storedToken);
+          setUnreadChatCount(
+            chats.reduce((total, chat) => total + chat.unread_count, 0)
+          );
+        } catch {
+          setUnreadChatCount(0);
+        }
+      };
+
+      fetchUnreadChatCount();
+    }, [])
+  );
+
   return (
     <View style={styles.bottomNav}>
       <TouchableOpacity style={styles.navItem} onPress={() => router.push("/home" as any)}>
@@ -47,7 +77,16 @@ function CommunityBottomNav() {
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.navItem} onPress={() => router.push("/chat" as any)}>
-        <Ionicons name="chatbubbles-outline" size={22} color="#777" />
+        <View style={styles.navIconWrap}>
+          <Ionicons name="chatbubbles-outline" size={22} color="#777" />
+          {unreadChatCount > 0 && (
+            <View style={styles.navBadge}>
+              <Text style={styles.navBadgeText}>
+                {unreadChatCount > 99 ? "99+" : unreadChatCount}
+              </Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.navText}>Chats</Text>
       </TouchableOpacity>
 
@@ -60,10 +99,13 @@ function CommunityBottomNav() {
 }
 
 export default function CommunityHomeFeed() {
+  const { sort } = useLocalSearchParams<{ sort?: string | string[] }>();
+  const sortValue = Array.isArray(sort) ? sort[0] : sort;
   const [posts, setPosts] = useState<SocialRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedRecipeForComments, setSelectedRecipeForComments] =
     useState<SocialRecipe | null>(null);
   const [comments, setComments] = useState<RecipeComment[]>([]);
@@ -247,6 +289,27 @@ export default function CommunityHomeFeed() {
     }
   };
 
+  const filteredPosts = useMemo(() => {
+    const categoryFiltered =
+      selectedCategory === "All"
+        ? posts
+        : posts.filter((post) => {
+            const postCategory = (post.category || post.diet || "Other").trim().toLowerCase();
+            return postCategory === selectedCategory.toLowerCase();
+          });
+
+    const orderedPosts =
+      sortValue === "latest"
+        ? [...categoryFiltered].sort((a, b) => {
+            const left = new Date(b.created_at || 0).getTime();
+            const right = new Date(a.created_at || 0).getTime();
+            return left - right;
+          })
+        : categoryFiltered;
+
+    return orderedPosts;
+  }, [posts, selectedCategory, sortValue]);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -272,18 +335,19 @@ export default function CommunityHomeFeed() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryRow}
         >
-          {["For You", "Vegetarian", "High Protein", "Vegan", "Quick Meals"].map(
-            (item, index) => (
-              <TouchableOpacity
-                key={item}
-                style={[styles.categoryChip, index === 0 && styles.activeCategory]}
+          {CATEGORY_OPTIONS.map((item) => (
+            <TouchableOpacity
+              key={item}
+              style={[styles.categoryChip, selectedCategory === item && styles.activeCategory]}
+              onPress={() => setSelectedCategory(item)}
+            >
+              <Text
+                style={[styles.categoryText, selectedCategory === item && styles.activeCategoryText]}
               >
-                <Text style={[styles.categoryText, index === 0 && styles.activeCategoryText]}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )
-          )}
+                {item}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
 
         {loading && (
@@ -291,11 +355,12 @@ export default function CommunityHomeFeed() {
         )}
 
         <View style={styles.feed}>
-          {posts.map((post) => {
+          {filteredPosts.map((post) => {
             const imageUri = getRecipeImageUrl(post.image);
             const creatorName = String(post.creator_name || post.creator?.name || "Creator");
             const creatorAvatar = post.creator?.avatar_url || post.creator_avatar_url || null;
             const creatorId = post.creator?.id || post.creator_id;
+            const postCategory = post.category || post.diet || "Other";
 
             return (
               <View key={post.id} style={styles.card}>
@@ -334,7 +399,7 @@ export default function CommunityHomeFeed() {
 
                 <View style={styles.content}>
                   <View style={styles.tag}>
-                    <Text style={styles.tagText}>{post.diet || "Recipe"}</Text>
+                    <Text style={styles.tagText}>{postCategory}</Text>
                   </View>
 
                   <Text style={styles.recipeTitle}>{post.title}</Text>
@@ -348,11 +413,6 @@ export default function CommunityHomeFeed() {
                     <View style={styles.metaItem}>
                       <Ionicons name="time-outline" size={17} color="#777" />
                       <Text style={styles.metaText}>{post.cook_time || "25 mins"}</Text>
-                    </View>
-
-                    <View style={styles.metaItem}>
-                      <Ionicons name="chatbubble-outline" size={17} color="#777" />
-                      <Text style={styles.metaText}>{post.comments_count} comments</Text>
                     </View>
                   </View>
 
@@ -697,6 +757,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
+  },
+  navIconWrap: {
+    width: 30,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navBadge: {
+    position: "absolute",
+    top: -7,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: "#F97316",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#FFF",
   },
   navText: {
     fontSize: 11,

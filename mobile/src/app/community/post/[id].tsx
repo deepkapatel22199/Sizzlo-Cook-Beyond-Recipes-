@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -19,11 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as SecureStore from "expo-secure-store";
 import { deleteRecipe, getRecipeById, RecipeDetail } from "@/api/recipeApi";
 import {
-  addRecipeComment,
-  deleteRecipeComment,
-  getRecipeComments,
   likeRecipe,
-  RecipeComment,
   saveRecipe,
   unlikeRecipe,
   unsaveRecipe,
@@ -36,9 +31,6 @@ export default function RecipePostDetail() {
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [comments, setComments] = useState<RecipeComment[]>([]);
-  const [commentText, setCommentText] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -49,9 +41,7 @@ export default function RecipePostDetail() {
       setRecipe(data);
 
       const currentUserId = await SecureStore.getItemAsync("user_id");
-      setCurrentUserId(currentUserId);
       setIsOwner(Boolean(data.is_owner) || (Boolean(currentUserId) && String(currentUserId) === String(data.creator_id)));
-      setComments(await getRecipeComments(Number(id)));
     } catch (error) {
       console.log("Recipe detail error:", error);
     } finally {
@@ -209,63 +199,6 @@ const handleToggleSave = async () => {
   }
 };
 
-const handleAddComment = async () => {
-  if (!recipe) return;
-
-  const trimmedComment = commentText.trim();
-
-  if (!trimmedComment) return;
-
-  try {
-    const token = await SecureStore.getItemAsync("token");
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    const comment = await addRecipeComment(token, recipe.id, trimmedComment);
-    setComments((currentComments) => [...currentComments, comment]);
-    setCommentText("");
-    setRecipe((currentRecipe) =>
-      currentRecipe
-        ? {
-            ...currentRecipe,
-            comments_count: currentRecipe.comments_count + 1,
-          }
-        : currentRecipe
-    );
-  } catch (error: any) {
-    Alert.alert("Error", error.message || "Unable to add comment.");
-  }
-};
-
-const handleDeleteComment = async (comment: RecipeComment) => {
-  try {
-    const token = await SecureStore.getItemAsync("token");
-
-    if (!token) {
-      router.replace("/login");
-      return;
-    }
-
-    await deleteRecipeComment(token, comment.id);
-    setComments((currentComments) =>
-      currentComments.filter((currentComment) => currentComment.id !== comment.id)
-    );
-    setRecipe((currentRecipe) =>
-      currentRecipe
-        ? {
-            ...currentRecipe,
-            comments_count: Math.max(0, currentRecipe.comments_count - 1),
-          }
-        : currentRecipe
-    );
-  } catch (error: any) {
-    Alert.alert("Error", error.message || "Unable to delete comment.");
-  }
-};
-
 if (loading) {
   return (
     <SafeAreaView style={styles.container}>
@@ -385,6 +318,33 @@ const creatorName = String(recipe.creator_name || recipe.creator?.name || "Creat
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.description}>{recipe.description}</Text>
 
+          {Array.isArray(recipe.photos) && recipe.photos.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Recipe Photos</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoRow}
+              >
+                {recipe.photos.map((photo, index) => {
+                  const photoUrl = getRecipeImageUrl(photo);
+
+                  return (
+                    <View key={`${photo}-${index}`} style={styles.photoCard}>
+                      {photoUrl ? (
+                        <Image source={{ uri: photoUrl }} style={styles.photoImage} />
+                      ) : (
+                        <View style={styles.photoPlaceholder}>
+                          <Ionicons name="image-outline" size={30} color="#F97316" />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+
           {/* Ingredients */}
           <Text style={styles.sectionTitle}>Ingredients</Text>
 
@@ -428,36 +388,6 @@ const creatorName = String(recipe.creator_name || recipe.creator?.name || "Creat
               <Text style={styles.actionText}>{recipe.is_saved ? "Saved" : "Save"}</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={styles.sectionTitle}>Comments</Text>
-
-          <View style={styles.commentComposer}>
-            <TextInput
-              style={styles.commentInput}
-              value={commentText}
-              onChangeText={setCommentText}
-              placeholder="Add a comment"
-              placeholderTextColor="#999"
-            />
-            <TouchableOpacity style={styles.commentSendButton} onPress={handleAddComment}>
-              <Ionicons name="send" size={18} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          {comments.map((comment) => (
-            <View key={comment.id} style={styles.commentItem}>
-              <Avatar avatarUrl={comment.user.avatar_url} size={34} />
-              <View style={styles.commentBody}>
-                <Text style={styles.commentAuthor}>{comment.user.name}</Text>
-                <Text style={styles.commentText}>{comment.text}</Text>
-              </View>
-              {String(currentUserId) === String(comment.user_id) && (
-                <TouchableOpacity onPress={() => handleDeleteComment(comment)}>
-                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
 
           <TouchableOpacity style={styles.startButton}>
             <Text style={styles.startButtonText}>Start Cooking</Text>
@@ -625,6 +555,30 @@ const styles = StyleSheet.create({
     color: "#666",
     lineHeight: 23,
     marginBottom: 20,
+  },
+  photoRow: {
+    gap: 10,
+    paddingBottom: 4,
+    marginBottom: 16,
+  },
+  photoCard: {
+    width: 140,
+    height: 140,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  photoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  photoPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF3E8",
   },
 
   listItem: {

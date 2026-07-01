@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   Image,
   Modal,
   ScrollView,
@@ -13,55 +14,21 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRecipe } from "@/contexts/RecipeContext";
 import { API_URL } from "@/services/api";
+import { getRecipeImageUrl } from "@/api/recipeImageApi";
+import { uploadRecipeImage } from "@/api/recipeImageApi";
 import * as SecureStore from "expo-secure-store";
-import * as FileSystem from "expo-file-system/legacy";
-
-type RecipeImageUploadResponse = {
-  message: string;
-  image_url: string;
-};
-
-async function uploadRecipeCover(token: string, imageUri: string) {
-  const trimmedImageUri = imageUri.trim();
-
-  if (!trimmedImageUri || trimmedImageUri.startsWith("http")) {
-    return null;
-  }
-
-  const uploadResult = await FileSystem.uploadAsync(
-    `${API_URL}/recipes/image`,
-    trimmedImageUri,
-    {
-      httpMethod: "POST",
-      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-      fieldName: "file",
-      mimeType: "image/jpeg",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  const data = JSON.parse(uploadResult.body) as
-    | RecipeImageUploadResponse
-    | { detail?: string };
-
-  if (uploadResult.status < 200 || uploadResult.status >= 300) {
-    throw new Error(
-      "detail" in data
-        ? data.detail || "Recipe image upload failed"
-        : "Recipe image upload failed"
-    );
-  }
-
-  return (data as RecipeImageUploadResponse).image_url;
-}
 
 
 export default function PreviewRecipe() {
   const { recipe, resetRecipe } = useRecipe();
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const imageUri = recipe.photos[0]?.trim() || null;
+  const coverImage = recipe.coverImage?.trim() || null;
+  const galleryPhotos = (recipe.photos || []).map((photo) => photo.trim()).filter(Boolean);
+  const previewImageUrl =
+    coverImage && (coverImage.startsWith("http") || coverImage.startsWith("/uploads"))
+      ? getRecipeImageUrl(coverImage)
+      : coverImage;
+  const categoryLabel = recipe.category?.trim() || "Other";
 
   const publishRecipe = async () => {
   try {
@@ -73,11 +40,33 @@ export default function PreviewRecipe() {
       return;
     }
 
-    const uploadedImageUrl = imageUri?.startsWith("http")
-      ? imageUri
-      : imageUri
-        ? await uploadRecipeCover(token, imageUri)
-        : null;
+    if (!recipe.category?.trim()) {
+      Alert.alert("Please select a category.");
+      return;
+    }
+
+    if (!coverImage) {
+      Alert.alert("Please add a cover image.");
+      return;
+    }
+
+    const uploadImageIfNeeded = async (uri: string) => {
+      if (!uri.trim()) {
+        return null;
+      }
+
+      if (uri.startsWith("http") || uri.startsWith("/uploads")) {
+        return uri;
+      }
+
+      const upload = await uploadRecipeImage(token, uri);
+      return upload.image_url;
+    };
+
+    const uploadedCoverImageUrl = await uploadImageIfNeeded(coverImage);
+    const uploadedGalleryUrls = await Promise.all(
+      galleryPhotos.map((photo) => uploadImageIfNeeded(photo))
+    );
 
     const response = await fetch(`${API_URL}/recipes`, {
       method: "POST",
@@ -88,11 +77,13 @@ export default function PreviewRecipe() {
       body: JSON.stringify({
         title: recipe.title,
         description: recipe.description,
-        image: uploadedImageUrl,
+        image: uploadedCoverImageUrl,
+        photos: uploadedGalleryUrls.filter((photo): photo is string => Boolean(photo)),
         cook_time: `${recipe.cookTime} mins`,
         difficulty: recipe.difficulty,
         servings: recipe.servings,
-        diet: recipe.category || "Recipe",
+        category: categoryLabel,
+        diet: categoryLabel,
         ingredients: recipe.ingredients.map(
           (item) => `${item.quantity} ${item.name}`
         ),
@@ -149,8 +140,8 @@ export default function PreviewRecipe() {
 
         {/* Image */}
         <View style={styles.imageCard}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.recipeImage} />
+          {previewImageUrl ? (
+            <Image source={{ uri: previewImageUrl }} style={styles.recipeImage} />
           ) : (
             <View style={styles.recipeImagePlaceholder}>
               <Ionicons name="restaurant-outline" size={42} color="#F97316" />
@@ -158,12 +149,40 @@ export default function PreviewRecipe() {
           )}
 
           <View style={styles.imageOverlay}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>{categoryLabel}</Text>
+            </View>
             <Text style={styles.recipeTitle}>{recipe.title}</Text>
-            <Text style={styles.recipeSubText}>
-                 {recipe.category || "Recipe"} • {recipe.description}
-            </Text>
+            <Text style={styles.recipeSubText}>{recipe.description}</Text>
           </View>
         </View>
+
+        {galleryPhotos.length > 0 && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Recipe Photos</Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
+              {galleryPhotos.map((photo, index) => {
+                const galleryUrl =
+                  photo.startsWith("http") || photo.startsWith("/uploads")
+                    ? getRecipeImageUrl(photo) || photo
+                    : photo;
+
+                return (
+                  <View key={`${photo}-${index}`} style={styles.galleryItem}>
+                    {galleryUrl ? (
+                      <Image source={{ uri: galleryUrl }} style={styles.galleryImage} />
+                    ) : (
+                      <View style={styles.galleryPlaceholder}>
+                        <Ionicons name="image-outline" size={26} color="#F97316" />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Info Cards */}
         <View style={styles.infoRow}>
@@ -319,6 +338,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
   },
+  categoryBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF3E8",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 8,
+  },
+  categoryBadgeText: {
+    color: "#F97316",
+    fontSize: 11,
+    fontWeight: "800",
+  },
 
   recipeTitle: {
     color: "#fff",
@@ -370,6 +402,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     marginBottom: 18,
+  },
+
+  galleryRow: {
+    gap: 12,
+    paddingRight: 6,
+  },
+
+  galleryItem: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#FFF3E8",
+  },
+
+  galleryImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  galleryPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   sectionTitle: {

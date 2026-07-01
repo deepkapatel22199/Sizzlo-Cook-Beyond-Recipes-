@@ -11,10 +11,13 @@ export type SocialRecipe = {
   title: string;
   description?: string | null;
   image: string | null;
+  photos?: string[];
+  category: string;
   diet: string | null;
   cook_time: string | null;
   difficulty: string | null;
   servings?: string | null;
+  created_at?: string;
   creator: Creator;
   creator_id: number;
   creator_name: string;
@@ -68,9 +71,12 @@ function normalizeCreator(rawCreator: any, recipe: any): Creator {
 
 export function normalizeSocialRecipe(recipe: any): SocialRecipe {
   const creator = normalizeCreator(recipe.creator, recipe);
+  const category = String(recipe.category ?? recipe.diet ?? "Other") || "Other";
 
   return {
     ...recipe,
+    category,
+    photos: Array.isArray(recipe.photos) ? recipe.photos.map((photo: any) => String(photo).trim()).filter(Boolean) : [],
     creator,
     creator_id: Number(recipe.creator_id ?? creator.id),
     creator_name: creator.name,
@@ -98,6 +104,25 @@ export async function getCommunityRecipes(token?: string | null): Promise<Social
   const response = await fetch(`${API_URL}/recipes`, { headers });
   const data = await parseResponse(response, "Unable to load recipes");
   return Array.isArray(data) ? data.map(normalizeSocialRecipe) : [];
+}
+
+export async function getLatestRecipes(limit = 5): Promise<SocialRecipe[]> {
+  const response = await fetch(`${API_URL}/recipes/latest?limit=${limit}`);
+  const data = await parseResponse(response, "Unable to load latest recipes");
+  return Array.isArray(data) ? data.map(normalizeSocialRecipe) : [];
+}
+
+export async function getRecipeCategories(): Promise<string[]> {
+  const response = await fetch(`${API_URL}/recipes/categories`);
+  const data = await parseResponse(response, "Unable to load recipe categories");
+
+  if (!data || !Array.isArray(data.categories)) {
+    return [];
+  }
+
+  return data.categories
+    .map((category: unknown) => String(category ?? "").trim())
+    .filter((category: string) => category.length > 0);
 }
 
 export async function likeRecipe(token: string, recipeId: number): Promise<SocialState> {

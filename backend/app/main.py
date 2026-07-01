@@ -4,13 +4,14 @@ import uuid
 from fastapi import FastAPI, Depends, Header, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from jose import jwt
-from sqlalchemy import or_, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 from .database import engine, SessionLocal
 from .models import (
     Base,
     User,
     Recipe,
+    RecipePhoto,
     Ingredient,
     Step,
     RecipeLike,
@@ -45,12 +46,33 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
+DEFAULT_RECIPE_CATEGORIES = [
+    "Vegetarian",
+    "Lunch",
+    "Dinner",
+    "Breakfast",
+    "Italian",
+    "Salads",
+    "Soups",
+    "Chicken",
+    "Pasta",
+    "Desserts",
+    "Drinks",
+    "Healthy",
+    "Quick Meals",
+    "Indian",
+    "Mexican",
+    "Asian",
+]
+
 
 def ensure_profile_columns():
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500)"))
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT"))
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100)"))
+        connection.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP"))
+        connection.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS category VARCHAR(100)"))
 
 
 ensure_profile_columns()
@@ -149,6 +171,33 @@ def get_recipe_social_state(recipe_id: int, db: Session, current_user: User | No
     }
 
 
+def normalize_recipe_category(category: str | None, diet: str | None = None):
+    for value in (category, diet, "Other"):
+        if value and value.strip():
+            return value.strip()
+
+    return "Other"
+
+
+def get_recipe_category(recipe: Recipe):
+    return normalize_recipe_category(recipe.category, recipe.diet)
+
+
+def get_recipe_photos(recipe_id: int, db: Session):
+    photos = (
+        db.query(RecipePhoto)
+        .filter(RecipePhoto.recipe_id == recipe_id)
+        .order_by(RecipePhoto.sort_order.asc(), RecipePhoto.created_at.asc())
+        .all()
+    )
+
+    return [photo.image_url for photo in photos if photo.image_url]
+
+
+def normalize_category_text(value: str | None):
+    return value.strip() if value and value.strip() else None
+
+
 def serialize_recipe_summary(recipe: Recipe, db: Session, current_user: User | None = None):
     social_state = get_recipe_social_state(recipe.id, db, current_user)
 
@@ -156,14 +205,38 @@ def serialize_recipe_summary(recipe: Recipe, db: Session, current_user: User | N
         "id": recipe.id,
         "title": recipe.title,
         "image": get_recipe_cover_image(recipe),
+        "category": get_recipe_category(recipe),
         "diet": recipe.diet,
+        "photos": get_recipe_photos(recipe.id, db),
         "cook_time": recipe.cook_time,
         "difficulty": recipe.difficulty,
+        "created_at": recipe.created_at,
         "creator": serialize_creator(recipe.creator),
         "creator_id": recipe.creator.id,
         "creator_name": recipe.creator.name,
         "creator_avatar_url": recipe.creator.avatar_url,
         **social_state,
+    }
+
+
+def serialize_recipe_feed_item(recipe: Recipe, db: Session, current_user: User | None = None):
+    return {
+        "id": recipe.id,
+        "title": recipe.title,
+        "description": recipe.description,
+        "image": get_recipe_cover_image(recipe),
+        "photos": get_recipe_photos(recipe.id, db),
+        "category": get_recipe_category(recipe),
+        "cook_time": recipe.cook_time,
+        "difficulty": recipe.difficulty,
+        "servings": recipe.servings,
+        "diet": recipe.diet,
+        "created_at": recipe.created_at,
+        "creator": serialize_creator(recipe.creator),
+        "creator_name": recipe.creator.name,
+        "creator_id": recipe.creator.id,
+        "creator_avatar_url": recipe.creator.avatar_url,
+        **get_recipe_social_state(recipe.id, db, current_user),
     }
 
 
@@ -240,10 +313,13 @@ def serialize_recipe_detail(recipe: Recipe, db: Session, current_user: User | No
         "title": recipe.title,
         "description": recipe.description,
         "image": get_recipe_cover_image(recipe),
+        "photos": get_recipe_photos(recipe.id, db),
+        "category": get_recipe_category(recipe),
         "cook_time": recipe.cook_time,
         "difficulty": recipe.difficulty,
         "servings": recipe.servings,
         "diet": recipe.diet,
+        "created_at": recipe.created_at,
         "creator": serialize_creator(recipe.creator),
         "creator_name": recipe.creator.name,
         "creator_id": recipe.creator.id,
@@ -394,16 +470,19 @@ def create_recipe(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    normalized_category = normalize_recipe_category(recipe.category, recipe.diet)
+    cover_image = normalize_recipe_image(recipe.image)
 
     new_recipe = Recipe(
         user_id=current_user.id,
         title=recipe.title,
         description=recipe.description,
-        image=normalize_recipe_image(recipe.image),
+        image=cover_image,
+        category=normalized_category,
         cook_time=recipe.cook_time,
         difficulty=recipe.difficulty,
         servings=recipe.servings,
-        diet=recipe.diet,
+        diet=normalized_category,
     )
 
     db.add(new_recipe)
@@ -427,12 +506,26 @@ def create_recipe(
             )
         )
 
+    for index, photo_url in enumerate(recipe.photos or []):
+        normalized_photo = normalize_recipe_image(photo_url)
+        if not normalized_photo:
+            continue
+
+        db.add(
+            RecipePhoto(
+                recipe_id=new_recipe.id,
+                image_url=normalized_photo,
+                sort_order=index,
+            )
+        )
+
     db.commit()
 
     return {
         "message": "Recipe created successfully",
         "recipe_id": new_recipe.id,
         "image": get_recipe_cover_image(new_recipe),
+        "photos": get_recipe_photos(new_recipe.id, db),
     }
 
 
@@ -456,12 +549,35 @@ def update_recipe(
 
     update_data = recipe_update.model_dump(exclude_unset=True)
 
-    for field in ["title", "description", "cook_time", "difficulty", "servings", "diet"]:
+    for field in ["title", "description", "cook_time", "difficulty", "servings"]:
         if field in update_data:
             setattr(recipe, field, update_data[field])
 
+    if "category" in update_data or "diet" in update_data:
+        normalized_category = normalize_recipe_category(
+            update_data.get("category"),
+            update_data.get("diet"),
+        )
+        recipe.category = normalized_category
+        recipe.diet = normalized_category
+
     if "image" in update_data:
         recipe.image = normalize_recipe_image(update_data["image"])
+
+    if "photos" in update_data and update_data["photos"] is not None:
+        db.query(RecipePhoto).filter(RecipePhoto.recipe_id == recipe.id).delete()
+        for index, photo_url in enumerate(update_data["photos"]):
+            normalized_photo = normalize_recipe_image(photo_url)
+            if not normalized_photo:
+                continue
+
+            db.add(
+                RecipePhoto(
+                    recipe_id=recipe.id,
+                    image_url=normalized_photo,
+                    sort_order=index,
+                )
+            )
 
     if "ingredients" in update_data and update_data["ingredients"] is not None:
         db.query(Ingredient).filter(Ingredient.recipe_id == recipe.id).delete()
@@ -507,6 +623,7 @@ def delete_recipe(
     db.query(RecipeLike).filter(RecipeLike.recipe_id == recipe.id).delete()
     db.query(SavedRecipe).filter(SavedRecipe.recipe_id == recipe.id).delete()
     db.query(RecipeComment).filter(RecipeComment.recipe_id == recipe.id).delete()
+    db.query(RecipePhoto).filter(RecipePhoto.recipe_id == recipe.id).delete()
     db.query(Ingredient).filter(Ingredient.recipe_id == recipe.id).delete()
     db.query(Step).filter(Step.recipe_id == recipe.id).delete()
     db.delete(recipe)
@@ -804,12 +921,22 @@ def serialize_chat(chat: Chat, current_user: User, db: Session):
         .order_by(Message.created_at.desc())
         .first()
     )
+    unread_count = (
+        db.query(Message)
+        .filter(
+            Message.chat_id == chat.id,
+            Message.sender_id != current_user.id,
+            Message.read_at.is_(None),
+        )
+        .count()
+    )
 
     return {
         "id": chat.id,
         "created_at": chat.created_at,
         "other_user": serialize_creator(other_user) if other_user else None,
         "last_message": last_message.text if last_message else None,
+        "unread_count": unread_count,
     }
 
 
@@ -875,6 +1002,7 @@ def serialize_message(message: Message):
         "chat_id": message.chat_id,
         "sender_id": message.sender_id,
         "text": message.text,
+        "read_at": message.read_at,
         "created_at": message.created_at,
         "sender": serialize_creator(message.sender),
     }
@@ -887,6 +1015,13 @@ def get_chat_messages(
     current_user: User = Depends(get_current_user),
 ):
     get_owned_chat(chat_id, current_user, db)
+    db.query(Message).filter(
+        Message.chat_id == chat_id,
+        Message.sender_id != current_user.id,
+        Message.read_at.is_(None),
+    ).update({"read_at": text("CURRENT_TIMESTAMP")}, synchronize_session=False)
+    db.commit()
+
     messages = (
         db.query(Message)
         .filter(Message.chat_id == chat_id)
@@ -924,28 +1059,131 @@ def send_chat_message(
 
 @app.get("/recipes")
 def get_recipes(
+    category: str | None = None,
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_user),
 ):
-    recipes = db.query(Recipe).order_by(Recipe.created_at.desc()).all()
+    recipes_query = db.query(Recipe)
+
+    if category:
+        normalized_category = normalize_category_text(category)
+        if normalized_category:
+            normalized_category_expr = func.lower(
+                func.coalesce(
+                    func.nullif(func.trim(Recipe.category), ""),
+                    func.nullif(func.trim(Recipe.diet), ""),
+                    "Other",
+                )
+            )
+            recipes_query = recipes_query.filter(
+                normalized_category_expr == normalized_category.lower()
+            )
+
+    recipes = recipes_query.order_by(Recipe.created_at.desc()).all()
 
     return [
-        {
-            "id": recipe.id,
-            "title": recipe.title,
-            "description": recipe.description,
-            "image": get_recipe_cover_image(recipe),
-            "cook_time": recipe.cook_time,
-            "difficulty": recipe.difficulty,
-            "servings": recipe.servings,
-            "diet": recipe.diet,
-            "creator": serialize_creator(recipe.creator),
-            "creator_name": recipe.creator.name,
-            "creator_id": recipe.creator.id,
-            "creator_avatar_url": recipe.creator.avatar_url,
-            **get_recipe_social_state(recipe.id, db, current_user),
-        }
+        serialize_recipe_feed_item(recipe, db, current_user)
         for recipe in recipes
+    ]
+
+
+@app.get("/recipes/latest")
+def get_latest_recipes(
+    limit: int = 5,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
+):
+    safe_limit = max(1, min(limit, 50))
+    recipes = db.query(Recipe).order_by(Recipe.created_at.desc()).limit(safe_limit).all()
+
+    return [
+        serialize_recipe_feed_item(recipe, db, current_user)
+        for recipe in recipes
+    ]
+
+
+@app.get("/recipes/categories")
+def get_recipe_categories(db: Session = Depends(get_db)):
+    recipes = db.query(Recipe.category, Recipe.diet).all()
+    categories_by_key: dict[str, str] = {}
+
+    for category, diet in recipes:
+        value = normalize_recipe_category(category, diet)
+        if not value or value == "Other":
+            continue
+
+        key = value.strip().lower()
+        if key not in categories_by_key:
+            categories_by_key[key] = value.strip()
+
+    categories = sorted(categories_by_key.values(), key=lambda item: item.lower())
+
+    if not categories:
+        categories = DEFAULT_RECIPE_CATEGORIES
+
+    return {"categories": categories}
+
+
+@app.get("/recipes/recommended")
+def get_recommended_recipes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    followed_ids = [
+        row.following_id
+        for row in db.query(UserFollow.following_id)
+        .filter(UserFollow.follower_id == current_user.id)
+        .all()
+    ]
+
+    followed_recipes = []
+    other_recipes = []
+    own_recipes = []
+
+    if followed_ids:
+        followed_recipes = (
+            db.query(Recipe)
+            .filter(Recipe.user_id.in_(followed_ids), Recipe.user_id != current_user.id)
+            .order_by(Recipe.created_at.desc())
+            .all()
+        )
+
+        other_recipes = (
+            db.query(Recipe)
+            .filter(
+                Recipe.user_id != current_user.id,
+                ~Recipe.user_id.in_(followed_ids),
+            )
+            .order_by(func.random())
+            .all()
+        )
+    else:
+        other_recipes = (
+            db.query(Recipe)
+            .filter(Recipe.user_id != current_user.id)
+            .order_by(func.random())
+            .all()
+        )
+
+    own_recipes = (
+        db.query(Recipe)
+        .filter(Recipe.user_id == current_user.id)
+        .order_by(func.random())
+        .all()
+    )
+
+    ordered_recipes = []
+    seen_recipe_ids: set[int] = set()
+
+    for recipe in [*followed_recipes, *other_recipes, *own_recipes]:
+        if recipe.id in seen_recipe_ids:
+            continue
+        seen_recipe_ids.add(recipe.id)
+        ordered_recipes.append(recipe)
+
+    return [
+        serialize_recipe_feed_item(recipe, db, current_user)
+        for recipe in ordered_recipes[:12]
     ]
 
 

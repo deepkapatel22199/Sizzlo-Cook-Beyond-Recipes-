@@ -6,6 +6,7 @@ export type ChatSummary = {
   created_at: string;
   other_user: Creator | null;
   last_message: string | null;
+  unread_count: number;
 };
 
 export type ChatMessage = {
@@ -13,6 +14,7 @@ export type ChatMessage = {
   chat_id: number;
   sender_id: number;
   text: string;
+  read_at: string | null;
   created_at: string;
   sender: Creator;
 };

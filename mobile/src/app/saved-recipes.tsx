@@ -13,15 +13,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getRecipeImageUrl } from "@/api/recipeImageApi";
-import { getSavedRecipes, SocialRecipe } from "@/api/socialApi";
+import { getSavedRecipes, SocialRecipe, unsaveRecipe } from "@/api/socialApi";
 import * as SecureStore from "expo-secure-store";
 
 export default function SavedRecipesScreen() {
   const [recipes, setRecipes] = useState<SocialRecipe[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchSavedRecipes = async () => {
+  const fetchSavedRecipes = useCallback(async () => {
     try {
+      setLoading(true);
       const token = await SecureStore.getItemAsync("token");
 
       if (!token) {
@@ -35,12 +36,32 @@ export default function SavedRecipesScreen() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleRemoveSavedRecipe = async (recipe: SocialRecipe) => {
+    const token = await SecureStore.getItemAsync("token");
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.filter((currentRecipe) => currentRecipe.id !== recipe.id)
+    );
+
+    try {
+      await unsaveRecipe(token, recipe.id);
+    } catch (error: any) {
+      setRecipes((currentRecipes) => [recipe, ...currentRecipes]);
+      Alert.alert("Error", error.message || "Unable to remove saved recipe.");
+    }
   };
 
   useFocusEffect(
     useCallback(() => {
       fetchSavedRecipes();
-    }, [])
+    }, [fetchSavedRecipes])
   );
 
   return (
@@ -79,6 +100,16 @@ export default function SavedRecipesScreen() {
                     <Ionicons name="restaurant-outline" size={30} color="#F97316" />
                   </View>
                 )}
+
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    handleRemoveSavedRecipe(recipe);
+                  }}
+                >
+                  <Ionicons name="bookmark" size={18} color="#FFF" />
+                </TouchableOpacity>
 
                 <View style={styles.overlay}>
                   <Text style={styles.gridTitle} numberOfLines={1}>
@@ -146,6 +177,17 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#FFF3E8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(249, 115, 22, 0.92)",
     alignItems: "center",
     justifyContent: "center",
   },

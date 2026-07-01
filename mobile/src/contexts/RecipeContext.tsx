@@ -19,6 +19,7 @@ type RecipeData = {
   prepTime: string;
   servings: string;
   cookTime: string;
+  coverImage: string | null;
   ingredients: Ingredient[];
   steps: RecipeStep[];
   photos: string[];
@@ -40,6 +41,7 @@ const initialRecipe: RecipeData = {
   servings: "",
   ingredients: [],
   steps: [],
+  coverImage: null,
   photos: [],
 };
 

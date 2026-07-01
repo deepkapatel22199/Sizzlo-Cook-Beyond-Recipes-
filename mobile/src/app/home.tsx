@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,23 +12,123 @@ import {
 } from "react-native";
 import { FontAwesome, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import {
+  getCommunityRecipes,
+  getLatestRecipes,
+  saveRecipe,
+  SocialRecipe,
+  unsaveRecipe,
+} from "@/api/socialApi";
+import { getRecipeImageUrl } from "@/api/recipeImageApi";
+import { HOME_RECIPE_CATEGORIES, RECIPE_CATEGORY_ICONS } from "@/constants/recipeCategories";
 
-const recommendedRecipes = [
-  { id: "1", title: "Honey Garlic Salmon Bowl", time: "25 mins", difficulty: "Easy", rating: "4.8" },
-  { id: "2", title: "Avocado Toast with Egg", time: "15 mins", difficulty: "Easy", rating: "4.9" },
-  { id: "3", title: "Quinoa Veggie Bowl", time: "20 mins", difficulty: "Easy", rating: "4.7" },
-];
-
+type CategoryState = string | null;
 
 export default function Home() {
+  const [allRecipes, setAllRecipes] = useState<SocialRecipe[]>([]);
+  const [recommendedRecipes, setRecommendedRecipes] = useState<SocialRecipe[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryState>(null);
+
+  const fetchRecipes = useCallback(async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+
+      const communityRecipes = await getCommunityRecipes(token);
+      setAllRecipes(communityRecipes);
+
+      try {
+        const latest = await getLatestRecipes(5);
+        setRecommendedRecipes(latest);
+      } catch {
+        setRecommendedRecipes(communityRecipes.slice(0, 5));
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Unable to load recipes.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchRecipes();
+    }, [fetchRecipes])
+  );
+
+  const handleToggleSave = async (recipe: SocialRecipe) => {
+    const token = await SecureStore.getItemAsync("token");
+
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
+
+    const toggleLocalSave = (recipesList: SocialRecipe[]) =>
+      recipesList.map((currentRecipe) =>
+        currentRecipe.id === recipe.id
+          ? { ...currentRecipe, is_saved: !currentRecipe.is_saved }
+          : currentRecipe
+      );
+
+    setAllRecipes(toggleLocalSave);
+    setRecommendedRecipes(toggleLocalSave);
+
+    try {
+      const updated = recipe.is_saved
+        ? await unsaveRecipe(token, recipe.id)
+        : await saveRecipe(token, recipe.id);
+
+      const applyServerSaveState = (recipesList: SocialRecipe[]) =>
+        recipesList.map((currentRecipe) =>
+          currentRecipe.id === recipe.id
+            ? { ...currentRecipe, is_saved: updated.is_saved }
+            : currentRecipe
+        );
+
+      setAllRecipes(applyServerSaveState);
+      setRecommendedRecipes(applyServerSaveState);
+    } catch (error: any) {
+      const restoreSaveState = (recipesList: SocialRecipe[]) =>
+        recipesList.map((currentRecipe) =>
+          currentRecipe.id === recipe.id
+            ? { ...currentRecipe, is_saved: recipe.is_saved }
+            : currentRecipe
+        );
+
+      setAllRecipes(restoreSaveState);
+      setRecommendedRecipes(restoreSaveState);
+      Alert.alert("Error", error.message || "Unable to update saved recipe.");
+    }
+  };
+
+  const categoryRecipes = useMemo(() => {
+    if (!selectedCategory) {
+      return [];
+    }
+
+    return allRecipes.filter((recipe) => {
+      const recipeCategory = (recipe.category || recipe.diet || "Other").trim().toLowerCase();
+      return recipeCategory === selectedCategory.toLowerCase();
+    });
+  }, [allRecipes, selectedCategory]);
+
+  const activeFeedRecipes = selectedCategory ? categoryRecipes : recommendedRecipes;
+  const feedTitle = selectedCategory ? `${selectedCategory} Recipes` : "Recommended For You";
+  const isCategoryFeedEmpty = Boolean(selectedCategory) && !categoryRecipes.length;
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <Ionicons name="restaurant-outline" size={30} color="#075B34" />
-            <Text style={styles.logo}>Sizz<Text style={styles.orange}>lo</Text></Text>
+            <Text style={styles.logo}>
+              Sizz<Text style={styles.orange}>lo</Text>
+            </Text>
           </View>
 
           <TouchableOpacity style={styles.bell}>
@@ -34,7 +137,7 @@ export default function Home() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.greeting}>Hi Chef! 👋</Text>
+        <Text style={styles.greeting}>Hi Chef!</Text>
         <Text style={styles.subGreeting}>What are we cooking today?</Text>
 
         <View style={styles.searchBox}>
@@ -49,7 +152,7 @@ export default function Home() {
 
         <View style={styles.heroCard}>
           <View style={styles.heroContent}>
-            <Text style={styles.aiBadge}>✦ AI RECOMMENDATION</Text>
+            <Text style={styles.aiBadge}>AI RECOMMENDATION</Text>
             <Text style={styles.heroTitle}>Grilled Chicken{"\n"}Power Bowl</Text>
             <Text style={styles.heroSub}>High protein, low carb,{"\n"}ready in 25 mins</Text>
 
@@ -64,28 +167,69 @@ export default function Home() {
           </View>
         </View>
 
-        <SectionHeader title="Categories" />
+        <SectionHeader
+          title="Categories"
+          onPress={() => router.push("/categories" as any)}
+          actionLabel="View all"
+        />
 
         <View style={styles.categories}>
-          <Category icon="food-variant" label="Salads" />
-          <Category icon="bowl-mix-outline" label="Soups" />
-          <Category icon="food-drumstick-outline" label="Chicken" />
-          <Category icon="noodles" label="Pasta" />
-          <Category icon="cake-variant-outline" label="Desserts" />
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>Recommended For You</Text>
-          </View>
-          <Text style={styles.viewAll}>View all</Text>
-        </View>
-
-        <View style={styles.recipeGrid}>
-          {recommendedRecipes.map((recipe) => (
-            <RecipeCard key={recipe.id} recipe={recipe} />
+          {HOME_RECIPE_CATEGORIES.map((label) => (
+            <Category
+              key={label}
+              icon={RECIPE_CATEGORY_ICONS[label]}
+              label={label}
+              active={selectedCategory === label}
+              onPress={() => setSelectedCategory((current) => (current === label ? null : label))}
+            />
           ))}
         </View>
+
+        <View style={styles.feedHeader}>
+          <Text style={styles.sectionTitle}>{feedTitle}</Text>
+
+          <View style={styles.feedHeaderActions}>
+            {selectedCategory ? (
+              <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+                <Text style={styles.clearText}>Clear</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => router.push({ pathname: "/community", params: { source: "recommended" } })}>
+                <Text style={styles.viewAll}>View all</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="small" color="#006B3C" style={{ marginVertical: 18 }} />
+        ) : !selectedCategory && !activeFeedRecipes.length ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No recipes yet. Follow creators or check Community.</Text>
+          </View>
+        ) : isCategoryFeedEmpty ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>
+              No recipes available for {selectedCategory} yet.
+            </Text>
+            <Text style={styles.emptyStateSub}>Try another category or explore Community.</Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.recipeRow}
+          >
+            {activeFeedRecipes.map((recipe) => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                onToggleSave={handleToggleSave}
+                compact
+              />
+            ))}
+          </ScrollView>
+        )}
 
         <View style={styles.askCard}>
           <View style={styles.askIconBox}>
@@ -98,7 +242,7 @@ export default function Home() {
           </View>
 
           <TouchableOpacity style={styles.askButton}>
-            <Text style={styles.askButtonText}>Ask Now ✨</Text>
+            <Text style={styles.askButtonText}>Ask Now</Text>
           </TouchableOpacity>
         </View>
 
@@ -111,58 +255,109 @@ export default function Home() {
 
       <View style={styles.bottomNav}>
         <NavItem icon="home" label="Home" active />
-        <NavItem icon="heart-outline" label="Saved" />
+        <NavItem icon="heart-outline" label="Saved" onPress={() => router.push("/saved-recipes" as any)} />
         <NavItem icon="restaurant-outline" label="AI Chef" />
-        <NavItem icon="people-outline" label="Community" onPress={() => router.push("/community")}/>
+        <NavItem icon="people-outline" label="Community" onPress={() => router.push("/community" as any)} />
         <NavItem icon="person-outline" label="Profile" onPress={() => router.push("/profile" as any)} />
       </View>
     </SafeAreaView>
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({
+  title,
+  onPress,
+  actionLabel = "View all",
+}: {
+  title: string;
+  onPress?: () => void;
+  actionLabel?: string;
+}) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.viewAll}>View all</Text>
+      {onPress ? (
+        <TouchableOpacity onPress={onPress}>
+          <Text style={styles.viewAll}>{actionLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
 
-function Category({ icon, label }: { icon: any; label: string }) {
+function Category({
+  icon,
+  label,
+  active,
+  onPress,
+}: {
+  icon: any;
+  label: string;
+  active?: boolean;
+  onPress?: () => void;
+}) {
   return (
-    <View style={styles.categoryItem}>
-      <View style={styles.categoryBox}>
-        <MaterialCommunityIcons name={icon} size={28} color="#075B34" />
+    <TouchableOpacity style={styles.categoryItem} onPress={onPress} activeOpacity={0.8}>
+      <View style={[styles.categoryBox, active && styles.categoryBoxActive]}>
+        <MaterialCommunityIcons name={icon} size={28} color={active ? "#fff" : "#075B34"} />
       </View>
-      <Text style={styles.categoryLabel}>{label}</Text>
-    </View>
+      <Text style={[styles.categoryLabel, active && styles.categoryLabelActive]}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
-function RecipeCard({ recipe }: { recipe: any }) {
-  return (
-    <View style={styles.recipeCard}>
-      <View style={styles.recipeImagePlaceholder}>
-        <Ionicons name="image-outline" size={32} color="#B8B8B8" />
-      </View>
+function RecipeCard({
+  recipe,
+  onToggleSave,
+  compact = false,
+}: {
+  recipe: SocialRecipe;
+  onToggleSave: (recipe: SocialRecipe) => void;
+  compact?: boolean;
+}) {
+  const imageUrl = getRecipeImageUrl(recipe.image);
+  const categoryLabel = recipe.category || recipe.diet || "Other";
 
-      <TouchableOpacity style={styles.heart}>
-        <Ionicons name="heart-outline" size={20} color="#6B7280" />
+  return (
+    <View style={[styles.recipeCard, compact && styles.recipeCardCompact]}>
+      <TouchableOpacity onPress={() => router.push(`/community/post/${recipe.id}` as any)}>
+        {imageUrl ? (
+          <View style={[styles.recipeImageWrap, compact && styles.recipeImageWrapCompact]}>
+            <Image source={{ uri: imageUrl }} style={styles.recipeImage} />
+          </View>
+        ) : (
+          <View style={[styles.recipeImagePlaceholder, compact && styles.recipeImagePlaceholderCompact]}>
+            <Ionicons name="restaurant-outline" size={32} color="#B8B8B8" />
+          </View>
+        )}
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.heart} onPress={() => onToggleSave(recipe)}>
+        <Ionicons
+          name={recipe.is_saved ? "bookmark" : "bookmark-outline"}
+          size={20}
+          color={recipe.is_saved ? "#F97316" : "#6B7280"}
+        />
+      </TouchableOpacity>
+
+      <View style={styles.tagPill}>
+        <Text style={styles.tagText}>{categoryLabel}</Text>
+      </View>
+
       <View style={styles.recipeInfo}>
-        <Text style={styles.recipeTitle}>{recipe.title}</Text>
+        <Text style={styles.recipeTitle} numberOfLines={2}>
+          {recipe.title}
+        </Text>
 
         <View style={styles.recipeMeta}>
           <Ionicons name="time-outline" size={12} color="#6B7280" />
-          <Text style={styles.metaText}>{recipe.time}</Text>
+          <Text style={styles.metaText}>{recipe.cook_time || "25 mins"}</Text>
         </View>
 
         <View style={styles.recipeMeta}>
           <FontAwesome name="star" size={12} color="#F59E0B" />
           <Text style={styles.metaText}>
-            {recipe.rating} • {recipe.difficulty}
+            {recipe.likes_count} likes • {recipe.difficulty || "Easy"}
           </Text>
         </View>
       </View>
@@ -182,30 +377,15 @@ function NavItem({
   onPress?: () => void;
 }) {
   return (
-    <TouchableOpacity
-      style={styles.navItem}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={icon}
-        size={23}
-        color={active ? "#075B34" : "#6B7280"}
-      />
+    <TouchableOpacity style={styles.navItem} onPress={onPress}>
+      <Ionicons name={icon} size={23} color={active ? "#075B34" : "#6B7280"} />
 
-      <Text
-        style={[
-          styles.navLabel,
-          active && styles.navLabelActive,
-        ]}
-      >
-        {label}
-      </Text>
+      <Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text>
 
       {active && <View style={styles.activeLine} />}
     </TouchableOpacity>
   );
 }
-
 
 const styles = StyleSheet.create({
   safe: {
@@ -340,13 +520,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#075B34",
   },
-  sectionSub: {
-    fontSize: 12.2,
-    color: "#6B7280",
-    fontWeight: "500",
-    marginTop: 3,
-    maxWidth: 260,
-  },
   viewAll: {
     fontSize: 13.5,
     fontWeight: "700",
@@ -356,10 +529,11 @@ const styles = StyleSheet.create({
   categories: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   categoryItem: {
     alignItems: "center",
+    flex: 1,
   },
   categoryBox: {
     width: 56,
@@ -370,10 +544,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 6,
   },
+  categoryBoxActive: {
+    backgroundColor: "#075B34",
+  },
   categoryLabel: {
     fontSize: 12,
     fontWeight: "700",
     color: "#111",
+    textAlign: "center",
+  },
+  categoryLabelActive: {
+    color: "#075B34",
+  },
+  feedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  feedHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  clearText: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: "#075B34",
+  },
+  recipeRow: {
+    gap: 12,
+    paddingBottom: 22,
+    paddingRight: 20,
+  },
+  recipeCardCompact: {
+    width: 170,
+  },
+  recipeImageWrapCompact: {
+    height: 96,
+  },
+  recipeImagePlaceholderCompact: {
+    height: 96,
   },
   recipeGrid: {
     flexDirection: "row",
@@ -387,6 +597,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+  recipeImageWrap: {
+    width: "100%",
+    height: 82,
+  },
+  recipeImage: {
+    width: "100%",
+    height: "100%",
   },
   recipeImagePlaceholder: {
     width: "100%",
@@ -402,6 +620,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.85)",
     borderRadius: 14,
     padding: 3,
+  },
+  tagPill: {
+    position: "absolute",
+    left: 7,
+    top: 7,
+    backgroundColor: "rgba(255,243,232,0.95)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    maxWidth: "72%",
+  },
+  tagText: {
+    fontSize: 9.5,
+    color: "#F97316",
+    fontWeight: "800",
   },
   recipeInfo: {
     padding: 8,
@@ -468,6 +701,27 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: "#fff",
     fontWeight: "800",
+  },
+  emptyState: {
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 22,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111",
+    lineHeight: 22,
+  },
+  emptyStateSub: {
+    fontSize: 13,
+    color: "#6B7280",
+    lineHeight: 18,
+    marginTop: 4,
   },
   fab: {
     position: "absolute",

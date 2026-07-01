@@ -26,6 +26,7 @@ class Recipe(Base):
     description = Column(Text, nullable=True)
     image = Column(String(500), nullable=True)
 
+    category = Column(String(100), nullable=True)
     cook_time = Column(String(50), nullable=True)
     difficulty = Column(String(50), nullable=True)
     servings = Column(String(50), nullable=True)
@@ -34,6 +35,16 @@ class Recipe(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     creator = relationship("User")
+
+
+class RecipePhoto(Base):
+    __tablename__ = "recipe_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+    image_url = Column(String(500), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Ingredient(Base):
@@ -112,6 +123,7 @@ class Message(Base):
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     text = Column(Text, nullable=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sender = relationship("User")
